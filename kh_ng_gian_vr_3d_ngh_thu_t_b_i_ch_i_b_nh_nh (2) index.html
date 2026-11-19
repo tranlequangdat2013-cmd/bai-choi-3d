@@ -1,0 +1,2263 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Không Gian VR 3D - Di Sản Bài Chòi Bình Định</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Be Vietnam Pro & Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <style>
+        :root {
+            --crimson: #9e1b1b;
+            --crimson-dark: #5e0d0d;
+            --gold: #eab308;
+            --gold-light: #fef08a;
+            --bamboo: #4d7c0f;
+            --paper: #fdf8ed;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Be Vietnam Pro', sans-serif;
+            background-color: #120606;
+            user-select: none;
+        }
+
+        .font-serif-vn {
+            font-family: 'Playfair Display', serif;
+        }
+
+        #canvas-container {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Hiệu ứng kính mờ truyền thống kết hợp hiện đại */
+        .glass-panel {
+            background: rgba(28, 10, 10, 0.78);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(234, 179, 8, 0.35);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+        }
+
+        .paper-card {
+            background: linear-gradient(145deg, #fffdf7 0%, #f5ebd6 100%);
+            border: 2px solid #b45309;
+            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5), inset 0 0 0 4px #fef3c7, inset 0 0 0 5px #991b1b;
+        }
+
+        /* Nhãn Hotspot 3D chiếu lên màn hình */
+        .hotspot-marker {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            z-index: 15;
+            cursor: pointer;
+            transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+        }
+
+        .hotspot-marker:hover {
+            transform: translate(-50%, -50%) scale(1.12);
+            z-index: 20;
+        }
+
+        .pulse-ring {
+            animation: pulseRing 2.2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+        }
+
+        @keyframes pulseRing {
+            0% { transform: scale(0.85); opacity: 0.9; }
+            70% { transform: scale(1.9); opacity: 0; }
+            100% { transform: scale(1.9); opacity: 0; }
+        }
+
+        /* Tùy chỉnh thanh cuộn cho bảng thông tin */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(234, 179, 8, 0.5);
+            border-radius: 10px;
+        }
+
+        /* Hiệu ứng lật thẻ bài */
+        @keyframes cardReveal {
+            0% { transform: scale(0.7) rotateY(90deg); opacity: 0; }
+            100% { transform: scale(1) rotateY(0deg); opacity: 1; }
+        }
+        .animate-card-reveal {
+            animation: cardReveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        /* VR Split Screen Simulation Mode */
+        body.vr-mode #hud-layer {
+            opacity: 0.92;
+        }
+        .vr-goggle-frame {
+            display: none;
+            pointer-events: none;
+            position: fixed;
+            inset: 0;
+            z-index: 40;
+            border: 18px solid #090303;
+            box-shadow: inset 0 0 80px rgba(0,0,0,0.95);
+        }
+        body.vr-mode .vr-goggle-frame {
+            display: block;
+        }
+    </style>
+</head>
+<body class="text-amber-50">
+
+    <!-- Màn hình chờ tải không gian 3D -->
+    <div id="loading-screen" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gradient-to-b from-[#2b0909] via-[#1a0505] to-[#0d0202] transition-opacity duration-700">
+        <div class="relative w-24 h-24 mb-6 flex items-center justify-center">
+            <div class="absolute inset-0 rounded-full border-4 border-amber-500/30 border-t-amber-400 animate-spin"></div>
+            <!-- Biểu tượng trống / thẻ bài SVG -->
+            <svg class="w-12 h-12 text-amber-400" viewBox="0 0 64 64" fill="none">
+                <rect x="18" y="8" width="28" height="48" rx="4" stroke="currentColor" stroke-width="3" fill="#7f1d1d"/>
+                <circle cx="32" cy="24" r="6" stroke="#fde047" stroke-width="2.5"/>
+                <path d="M24 40H40M26 46H38" stroke="#fde047" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <h1 class="font-serif-vn text-2xl md:text-4xl font-bold text-amber-300 tracking-wide text-center px-4">
+            KHÔNG GIAN DI SẢN BÀI CHÒI BÌNH ĐỊNH
+        </h1>
+        <p class="text-amber-200/80 text-sm md:text-base mt-2 text-center px-6">
+            Đang dựng sân khấu hội xuân, 9 chòi tre và dàn nhạc cụ dân tộc...
+        </p>
+    </div>
+
+    <!-- Khung viền giả lập kính VR khi bật chế độ VR -->
+    <div class="vr-goggle-frame rounded-3xl">
+        <div class="absolute top-3 left-1/2 -translate-x-1/2 bg-red-900/90 border border-amber-400/50 px-4 py-1 rounded-full text-xs text-amber-200 tracking-wider uppercase">
+            Chế độ Quan sát VR 360° Toàn Cảnh
+        </div>
+    </div>
+
+    <!-- Khung chứa Canvas Three.js -->
+    <div id="canvas-container"></div>
+
+    <!-- Lớp chứa các điểm nóng (Hotspot Markers) chiếu từ 3D sang 2D -->
+    <div id="hotspots-overlay" class="fixed inset-0 pointer-events-none z-10 overflow-hidden"></div>
+
+    <!-- Giao diện điều khiển HUD -->
+    <div id="hud-layer" class="fixed inset-0 pointer-events-none z-20 flex flex-col justify-between p-3 sm:p-5">
+        
+        <!-- Thanh Header trên cùng -->
+        <header class="flex flex-wrap items-start justify-between gap-3">
+            <!-- Tiêu đề & Huy hiệu UNESCO -->
+            <div class="glass-panel pointer-events-auto rounded-2xl px-4 py-2.5 sm:px-5 sm:py-3 max-w-md border-l-4 border-l-amber-400">
+                <div class="flex items-center gap-2">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span class="text-[11px] sm:text-xs font-semibold uppercase tracking-widest text-amber-300">
+                        Di sản Văn hóa Phi vật thể UNESCO
+                    </span>
+                </div>
+                <h1 class="font-serif-vn text-lg sm:text-2xl font-bold text-white leading-tight mt-0.5">
+                    Nghệ Thuật Bài Chòi Bình Định
+                </h1>
+                <p class="text-xs text-amber-100/75 hidden sm:block mt-0.5">
+                    Mô hình không gian 3D tương tác • Kéo để xoay 360°, cuộn để thu phóng
+                </p>
+            </div>
+
+            <!-- Cụm nút công cụ bên phải -->
+            <div class="pointer-events-auto flex flex-wrap items-center gap-2">
+                <!-- Nút Chơi Đánh Bài Chòi ngay trong 3D -->
+                <button id="btn-start-playmode" class="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-red-950 font-bold px-3.5 py-2.5 sm:px-4 sm:py-2.5 rounded-xl shadow-lg shadow-amber-900/40 transition transform hover:scale-105 active:scale-95 text-xs sm:text-sm">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                        <path d="M2 17l10 5 10-5"/>
+                        <path d="M2 12l10 5 10-5"/>
+                    </svg>
+                    <span>Vào Chòi Chơi Bài</span>
+                </button>
+
+                <!-- Nút Thư viện 30 Thẻ Bài Chòi -->
+                <button id="btn-open-deck" class="glass-panel hover:bg-red-900/70 text-amber-200 border border-amber-400/50 font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm transition">
+                    <svg class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <rect x="4" y="3" width="16" height="18" rx="2"/>
+                        <path d="M8 7h8M8 12h8M8 17h5"/>
+                    </svg>
+                    <span>Thư Viện 30 Thẻ</span>
+                </button>
+
+                <!-- Nút Tự động tham quan (Auto-tour) -->
+                <button id="btn-autotour" class="glass-panel hover:bg-red-900/60 text-amber-200 px-3 py-2.5 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm font-medium transition" title="Tự động tham quan các khu vực">
+                    <svg id="icon-tour" class="w-4 h-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <span id="text-autotour" class="hidden xl:inline">Tham quan 360°</span>
+                </button>
+
+                <!-- Nút Âm thanh Ngũ Cung & Lễ hội -->
+                <button id="btn-audio" class="glass-panel hover:bg-red-900/60 text-amber-200 p-2.5 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm font-medium transition" title="Bật/Tắt nhạc ngũ cung & tiếng trống hội">
+                    <svg id="icon-audio-off" class="w-5 h-5 text-amber-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <line x1="23" y1="9" x2="17" y2="15"></line>
+                        <line x1="17" y1="9" x2="23" y2="15"></line>
+                    </svg>
+                    <svg id="icon-audio-on" class="w-5 h-5 text-emerald-400 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                    <span class="hidden xl:inline" id="text-audio">Âm thanh</span>
+                </button>
+
+                <!-- Nút Chế độ VR / Toàn màn hình -->
+                <button id="btn-vr" class="glass-panel hover:bg-red-900/60 text-amber-200 p-2.5 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm font-medium transition" title="Chế độ VR 360° / Toàn màn hình">
+                    <svg class="w-5 h-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M2 8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-4.5l-2-3h-3l-2 3H4a2 2 0 0 1-2-2V8z"/>
+                        <circle cx="8" cy="12" r="2"/>
+                        <circle cx="16" cy="12" r="2"/>
+                    </svg>
+                    <span class="hidden md:inline">VR 360°</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Khu vực giữa: Bảng Thông Tin Giáo Dục Chi Tiết + Bảng Điều Khiển Ván Chơi Hội Bài Chòi -->
+        <div class="relative flex-1 flex items-center justify-between my-2 pointer-events-none gap-3">
+            
+            <!-- BẢNG ĐIỀU KHIỂN VÁN CHƠI ĐÁNH BÀI CHÒI (Hiển thị bên trái khi vào chòi chơi) -->
+            <aside id="game-hud-panel" class="glass-panel pointer-events-auto w-full sm:w-[410px] max-h-[72vh] rounded-2xl p-4 sm:p-5 flex flex-col justify-between transition-all duration-300 -translate-x-[125%] opacity-0 border-2 border-amber-400/50">
+                <div class="overflow-y-auto pr-1 space-y-3">
+                    <!-- Header ván chơi -->
+                    <div class="flex items-center justify-between border-b border-amber-500/30 pb-2.5">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span id="player-hut-badge" class="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500 text-red-950 uppercase">
+                                    Chòi Số 1
+                                </span>
+                                <span id="game-score-badge" class="text-xs font-semibold text-emerald-300">
+                                    Trúng: 0 / 3 thẻ
+                                </span>
+                            </div>
+                            <h2 class="font-serif-vn text-lg sm:text-xl font-bold text-white mt-1">
+                                Sới Hội Đánh Bài Chòi
+                            </h2>
+                        </div>
+                        <button id="btn-exit-playmode" class="px-2.5 py-1.5 rounded-lg bg-red-950/90 hover:bg-red-800 text-amber-200 text-xs font-medium border border-amber-500/30 transition">
+                            Rời Chòi ✕
+                        </button>
+                    </div>
+
+                    <!-- Khung Câu Thai Đố của Anh Hiệu -->
+                    <div class="rounded-xl bg-gradient-to-br from-red-950/95 to-amber-950/80 border border-amber-400/40 p-3.5 relative">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                                <span>🎤 Anh Hiệu Hô Thai:</span>
+                            </span>
+                            <button id="btn-toggle-hint" class="text-[11px] text-amber-300 underline hover:text-white transition hidden">
+                                Gợi ý giải nghĩa
+                            </button>
+                        </div>
+
+                        <div id="riddle-box" class="min-h-[68px] flex flex-col justify-center">
+                            <p id="riddle-verse" class="font-serif-vn italic text-sm sm:text-base text-amber-100 leading-relaxed text-center">
+                                Nhấn <strong>"Anh Hiệu Xóc Thẻ &amp; Hô Thai"</strong> để bắt đầu lượt chơi mới!
+                            </p>
+                            <p id="riddle-hint-text" class="text-xs text-emerald-300/90 mt-2 pt-2 border-t border-amber-500/20 hidden">
+                                <!-- Gợi ý văn hóa sẽ hiện tại đây -->
+                            </p>
+                        </div>
+
+                        <!-- Trạng thái lượt đấu -->
+                        <div id="turn-status-banner" class="mt-2 text-center text-xs font-medium text-amber-300/90">
+                            Bạn đang giữ 3 thẻ bài tre trên lan can chòi.
+                        </div>
+                    </div>
+
+                    <!-- 3 Thẻ Bài Tre Trên Tay Người Chơi -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="text-xs font-semibold text-amber-200 uppercase tracking-wider">
+                                🎋 3 Thẻ Bài Của Bạn (Chạm để soi chi tiết):
+                            </span>
+                            <button id="btn-switch-hut" class="text-[11px] text-amber-300 hover:underline">
+                                Đổi chòi khác
+                            </button>
+                        </div>
+                        <div id="player-hand-cards" class="grid grid-cols-3 gap-2">
+                            <!-- 3 thẻ bài của người chơi được render tại đây -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Các nút hành động lượt chơi -->
+                <div class="pt-3 mt-2 border-t border-amber-500/30 space-y-2">
+                    <button id="btn-call-next-turn" class="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-red-950 font-bold py-2.5 px-4 rounded-xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2 text-xs sm:text-sm">
+                        <span>🎋 Anh Hiệu Xóc Thẻ &amp; Hô Thai</span>
+                    </button>
+
+                    <div id="player-action-row" class="grid grid-cols-2 gap-2 hidden">
+                        <button id="btn-hit-woodblock" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 px-3 rounded-xl shadow transition flex items-center justify-center gap-1.5 text-xs sm:text-sm">
+                            <span>🥢 Gõ Mõ Nhận Thẻ!</span>
+                        </button>
+                        <button id="btn-pass-turn" class="bg-red-900/90 hover:bg-red-800 text-amber-100 border border-amber-400/30 font-semibold py-2.5 px-3 rounded-xl transition text-xs sm:text-sm">
+                            Không có • Bỏ qua
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- BẢNG THÔNG TIN GIÁO DỤC CHI TIẾT (Hiển thị bên phải khi chọn Hotspot) -->
+            <aside id="edu-panel" class="glass-panel pointer-events-auto w-full sm:w-[410px] max-h-[68vh] sm:max-h-[74vh] rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 translate-x-[120%] opacity-0 ml-auto">
+                <div class="overflow-y-auto pr-1">
+                    <!-- Header thẻ thông tin -->
+                    <div class="flex items-start justify-between gap-2 border-b border-amber-500/30 pb-3">
+                        <div>
+                            <span id="edu-badge" class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-400/30 mb-1">
+                                Kiến trúc &amp; Không gian
+                            </span>
+                            <h2 id="edu-title" class="font-serif-vn text-xl font-bold text-amber-200">
+                                Chòi Trung Tâm &amp; Chòi Tre
+                            </h2>
+                        </div>
+                        <button id="btn-close-edu" class="p-1.5 rounded-lg bg-red-950/80 hover:bg-red-800 text-amber-200 transition" title="Đóng bảng thông tin">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Minh họa Vector SVG động theo chủ đề -->
+                    <div id="edu-illustration" class="my-3.5 rounded-xl bg-gradient-to-br from-red-950/90 to-amber-950/60 border border-amber-500/25 p-3 flex items-center justify-center">
+                        <!-- Nội dung SVG được nạp bằng JS -->
+                    </div>
+
+                    <!-- Nội dung giáo dục -->
+                    <div id="edu-content" class="space-y-2.5 text-sm text-amber-50/90 leading-relaxed">
+                        <!-- Nội dung mô tả chi tiết -->
+                    </div>
+
+                    <!-- Điểm nhấn kiến thức -->
+                    <div class="mt-3.5 p-3 rounded-xl bg-amber-500/10 border border-amber-400/25">
+                        <p class="text-xs font-semibold text-amber-300 uppercase tracking-wider mb-1">💡 Góc Khám Phá Văn Hóa</p>
+                        <p id="edu-fact" class="text-xs text-amber-100/85 italic"></p>
+                    </div>
+                </div>
+
+                <!-- Thanh nút nghe thử âm thanh đặc trưng & chuyển điểm tiếp theo -->
+                <div class="pt-3 mt-3 border-t border-amber-500/30 flex items-center justify-between gap-2">
+                    <button id="btn-play-sample" class="flex-1 bg-red-800/90 hover:bg-red-700 text-amber-100 border border-amber-400/40 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition">
+                        <svg class="w-4 h-4 text-amber-300" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5v14l11-7z"/>
+                        </svg>
+                        <span id="btn-sample-label">Nghe nhịp trống &amp; phách</span>
+                    </button>
+                    <button id="btn-next-hotspot" class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-400/30 py-2 px-3 rounded-xl text-xs font-semibold transition">
+                        Điểm kế tiếp →
+                    </button>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Thanh điều hướng nhanh dưới cùng -->
+        <footer class="flex flex-col items-center gap-2">
+            <!-- Hướng dẫn thao tác nhanh trên mobile -->
+            <div id="quick-hint" class="glass-panel px-3 py-1 rounded-full text-[11px] text-amber-200/90 flex items-center gap-2 sm:hidden">
+                <span>👆 Xoay 360°</span>
+                <span>•</span>
+                <span>Chạm chòi tre hoặc điểm sáng</span>
+            </div>
+
+            <!-- Thanh chọn nhanh góc nhìn & 5 điểm di sản -->
+            <nav class="glass-panel pointer-events-auto rounded-2xl p-1.5 flex items-center gap-1 sm:gap-1.5 overflow-x-auto max-w-full">
+                <button data-target="overview" class="nav-pill active px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap bg-amber-500 text-red-950 transition">
+                    🏮 Toàn Cảnh
+                </button>
+                <button data-target="birdseye" class="nav-pill px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap text-amber-100 hover:bg-white/10 transition">
+                    🦅 Trên Cao
+                </button>
+                <button data-target="choi" class="nav-pill px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap text-amber-100 hover:bg-white/10 transition">
+                    1. Chòi Cái &amp; Anh Hiệu
+                </button>
+                <button data-target="kientruc" class="nav-pill px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap text-amber-100 hover:bg-white/10 transition">
+                    2. Chòi Tre
+                </button>
+                <button data-target="bobai" class="nav-pill px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap text-amber-100 hover:bg-white/10 transition">
+                    3. 30 Thẻ Bài
+                </button>
+                <button data-target="nhaccu" class="nav-pill px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap text-amber-100 hover:bg-white/10 transition">
+                    4. Nhạc Cụ
+                </button>
+                <button data-target="unesco" class="nav-pill px-3 py-2 rounded-xl text-xs font-medium whitespace-nowrap text-amber-100 hover:bg-white/10 transition">
+                    5. Di Sản UNESCO
+                </button>
+            </nav>
+        </footer>
+    </div>
+
+    <!-- Modal 1: Chọn Chòi Tre Để Ngồi Chơi -->
+    <div id="hut-select-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+        <div class="glass-panel w-full max-w-xl rounded-3xl p-5 sm:p-6 border-2 border-amber-400/50 relative">
+            <button id="btn-close-hut-modal" class="absolute top-4 right-4 w-9 h-9 rounded-full bg-red-950/90 hover:bg-red-800 text-amber-200 flex items-center justify-center border border-amber-400/30 transition">
+                ✕
+            </button>
+            <div class="text-center mb-4">
+                <span class="text-xs uppercase tracking-widest text-amber-400 font-semibold">Trải Nghiệm Nhập Vai 3D</span>
+                <h2 class="font-serif-vn text-2xl font-bold text-white mt-0.5">Chọn Một Chòi Tre Để Nhập Hội</h2>
+                <p class="text-xs text-amber-100/80 mt-1">Camera sẽ đưa bạn lên ngồi trên chòi tre và nhận 3 thẻ bài ngẫu nhiên từ Anh Hiệu</p>
+            </div>
+            <div id="hut-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 my-3">
+                <!-- 8 chòi tre được sinh bằng JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: Thư Viện Khám Phá 30 Thẻ Bài Chòi (3 Pho: Văn - Vạn - Sách) -->
+    <div id="deck-library-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-5">
+        <div class="glass-panel w-full max-w-5xl max-h-[90vh] rounded-3xl p-4 sm:p-6 border-2 border-amber-400/50 flex flex-col">
+            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-amber-500/30 pb-3">
+                <div>
+                    <span class="text-[11px] uppercase tracking-widest text-amber-400 font-semibold">Hệ Thống Quân Bài Dân Gian</span>
+                    <h2 class="font-serif-vn text-xl sm:text-2xl font-bold text-white">
+                        Thư Viện 30 Thẻ Bài Chòi (Pho Văn • Pho Vạn • Pho Sách)
+                    </h2>
+                </div>
+                <button id="btn-close-deck" class="w-9 h-9 rounded-full bg-red-950/90 hover:bg-red-800 text-amber-200 flex items-center justify-center border border-amber-400/30 transition">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Bộ lọc 3 Pho -->
+            <div class="flex flex-wrap items-center justify-between gap-2 my-3">
+                <div class="flex items-center gap-1.5">
+                    <button data-pho="ALL" class="pho-filter-btn active px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 text-red-950 transition">
+                        Tất cả (30 thẻ)
+                    </button>
+                    <button data-pho="Pho Văn" class="pho-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-amber-200 hover:bg-white/20 transition">
+                        Pho Văn (10)
+                    </button>
+                    <button data-pho="Pho Vạn" class="pho-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-amber-200 hover:bg-white/20 transition">
+                        Pho Vạn (10)
+                    </button>
+                    <button data-pho="Pho Sách" class="pho-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 text-amber-200 hover:bg-white/20 transition">
+                        Pho Sách (10)
+                    </button>
+                </div>
+                <span class="text-xs text-amber-200/75 italic">Chạm vào thẻ bài bất kỳ để xem câu thai &amp; nghe hô</span>
+            </div>
+
+            <!-- Lưới thẻ bài + Khung xem chi tiết -->
+            <div class="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <!-- Danh sách thẻ bài -->
+                <div id="deck-cards-grid" class="lg:col-span-2 overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 content-start">
+                    <!-- 30 thẻ bài render tại đây -->
+                </div>
+
+                <!-- Khung chi tiết thẻ bài đang chọn -->
+                <div class="bg-red-950/60 border border-amber-400/30 rounded-2xl p-4 flex flex-col items-center justify-between overflow-y-auto">
+                    <div id="detail-card-preview" class="paper-card w-56 rounded-2xl p-3.5 text-red-950 flex flex-col items-center text-center">
+                        <div class="w-full flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-red-800 border-b border-red-900/20 pb-1">
+                            <span id="lib-card-pho">Pho Văn</span>
+                            <span id="lib-card-han" class="font-serif-vn text-xs">一 徒</span>
+                        </div>
+                        <h3 id="lib-card-name" class="font-serif-vn text-xl font-bold text-red-900 my-1.5">
+                            NHỨT TRÒ
+                        </h3>
+                        <div id="lib-card-svg" class="w-24 h-24 my-1 flex items-center justify-center bg-amber-100/80 rounded-xl border border-amber-700/30 p-2">
+                        </div>
+                        <div class="mt-2 bg-red-900/5 rounded-xl p-2 w-full border border-red-900/15">
+                            <p id="lib-card-verse" class="font-serif-vn italic text-xs font-semibold text-red-950 leading-snug">
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="w-full mt-3 space-y-2">
+                        <div class="bg-black/30 rounded-xl p-2.5 text-xs text-amber-100/90 leading-relaxed border border-amber-500/20">
+                            <strong class="text-amber-300">Giải nghĩa giáo dục:</strong>
+                            <span id="lib-card-meaning"></span>
+                        </div>
+                        <button id="btn-lib-hear-ho" class="w-full bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-red-950 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition">
+                            <span>🥁 Nghe Điệu Hô &amp; Trống Chiến</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 3: Tổng Kết Chiến Thắng Hội Bài Chòi ("TỚI RỒI!") -->
+    <div id="victory-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/80 backdrop-blur-md p-4">
+        <div class="glass-panel w-full max-w-lg rounded-3xl p-6 border-2 border-amber-400 text-center relative overflow-hidden">
+            <div class="inline-block px-4 py-1 rounded-full bg-amber-500 text-red-950 font-extrabold text-xs uppercase tracking-widest mb-2 animate-bounce">
+                🏆 TỚI RỒI! CHIẾN THẮNG HỘI XUÂN 🏆
+            </div>
+            <h2 class="font-serif-vn text-2xl sm:text-3xl font-bold text-amber-200">
+                Chúc Mừng Bạn Đã Trúng Đủ 3 Thẻ!
+            </h2>
+            <p class="text-xs sm:text-sm text-amber-100/85 mt-1.5">
+                Tiếng trống chiến rộn rã vang lên, Anh Hiệu trao cờ thưởng danh dự cho chòi của bạn!
+            </p>
+
+            <div id="victory-cards-summary" class="grid grid-cols-3 gap-2 my-4 text-left">
+                <!-- Tóm tắt 3 quân bài người chơi đã trúng -->
+            </div>
+
+            <div class="flex flex-wrap gap-3 justify-center mt-4">
+                <button id="btn-play-again" class="flex-1 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-red-950 font-bold py-3 px-5 rounded-xl shadow-lg text-sm transition">
+                    🎋 Chơi Ván Mới
+                </button>
+                <button id="btn-close-victory" class="bg-red-900/90 hover:bg-red-800 text-amber-100 border border-amber-400/40 font-semibold py-3 px-5 rounded-xl text-sm transition">
+                    Tiếp Tục Tham Quan 3D
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thông báo nổi (Toast Message thay cho alert) -->
+    <div id="toast-box" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none opacity-0 transition-opacity duration-300">
+        <div class="glass-panel px-4 py-2 rounded-full text-xs sm:text-sm text-amber-200 border border-amber-400/50 shadow-xl">
+            <span id="toast-text">Thông báo</span>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * 1. CƠ SỞ DỮ LIỆU GIÁO DỤC & BỘ 30 THẺ BÀI CHÒI CHUẨN (VĂN - VẠN - SÁCH)
+         * ============================================================================
+         */
+        const HOTSPOT_DATA = {
+            choi: {
+                id: 'choi',
+                badge: '1. Chòi Cái & Nghệ Nhân',
+                title: '1. Chòi Cái & Vai Trò Anh Hiệu',
+                position3D: new THREE.Vector3(0, 4.7, -11.5),
+                cameraPos: new THREE.Vector3(0, 4.8, -2.2),
+                lookAt: new THREE.Vector3(0, 2.8, -11.5),
+                sampleType: 'ho_thai',
+                sampleLabel: 'Nghe điệu hô thai của Anh Hiệu',
+                svg: `<svg class="w-full h-24" viewBox="0 0 220 90" fill="none">
+                        <circle cx="110" cy="24" r="11" fill="#fde68a"/>
+                        <path d="M98 18 Q110 10 122 18" stroke="#1e293b" stroke-width="4"/>
+                        <path d="M88 82 L96 40 L124 40 L132 82 Z" fill="#b91c1c" stroke="#fde047" stroke-width="1.5"/>
+                        <rect x="134" y="42" width="10" height="24" rx="2" fill="#d97706" stroke="#fef08a"/>
+                        <path d="M137 34 L137 42 M141 32 L141 42" stroke="#fef08a" stroke-width="2"/>
+                      </svg>`,
+                paragraphs: [
+                    '<strong>Chòi Cái (Chòi Trung Tâm)</strong> đặt ở vị trí trang trọng nhất của hội bài, dành cho bậc cao niên, ban giám khảo và nghệ nhân điều hành cuộc chơi.',
+                    '<strong>Anh Hiệu</strong> (hoặc Chị Hiệu) mặc áo dài khăn đóng, cầm ống thẻ tre đi quanh sân khấu. Thay vì đọc tên quân bài, Anh Hiệu ứng tác những câu <strong>hô thai</strong> theo làn điệu dân ca Bình Định như <em>Xuân nữ, Xàng xê, Cổ bản, Hò Quảng</em>.'
+                ],
+                fact: 'Người Anh Hiệu giỏi phải thuộc lòng hàng trăm câu thai cổ và biết ứng biến hài hước, duyên dáng khiến cả sới bài reo hò phấn khởi.'
+            },
+            kientruc: {
+                id: 'kientruc',
+                badge: '2. Kiến Trúc Dân Gian',
+                title: '2. Kiến Trúc Chòi Tre Bình Định',
+                position3D: new THREE.Vector3(-8.2, 4.2, -8.5),
+                cameraPos: new THREE.Vector3(-4.2, 4.2, -3.5),
+                lookAt: new THREE.Vector3(-8.2, 2.6, -8.5),
+                sampleType: 'drum_roll',
+                sampleLabel: 'Nghe tiếng trống khai hội chòi',
+                svg: `<svg class="w-full h-24" viewBox="0 0 220 90" fill="none">
+                        <path d="M35 45 L110 12 L185 45 Z" fill="#b45309" stroke="#fde047" stroke-width="2"/>
+                        <path d="M55 45 L55 82 M165 45 L165 82 M85 45 L85 82 M135 45 L135 82" stroke="#eab308" stroke-width="3"/>
+                        <rect x="50" y="62" width="120" height="6" fill="#92400e"/>
+                        <polygon points="110,2 126,6 110,10" fill="#ef4444"/>
+                      </svg>`,
+                paragraphs: [
+                    'Hội Bài Chòi truyền thống dựng <strong>9 chòi</strong> (1 Chòi Cái và 8 chòi con xếp hình chữ U hoặc vòng cung). Mỗi chòi dựng bằng tre nứa, mái lợp lá dừa hoặc tranh, sàn cao cách mặt đất khoảng 1,5m – 2m.',
+                    'Trước mỗi chòi có thang tre để người chơi leo lên ngồi, trên lan can đặt một ống tre đựng <strong>3 thẻ bài</strong> cùng một chiếc mõ tre để gõ báo hiệu khi trúng thẻ.'
+                ],
+                fact: 'Kiến trúc chòi tre bắt nguồn từ chòi canh nương rẫy của nông dân Bình Định xưa; người dân hô hát đối đáp giữa các chòi để xua mệt nhọc và đuổi thú rừng.'
+            },
+            bobai: {
+                id: 'bobai',
+                badge: '3. Hệ Thống Thẻ Chơi',
+                title: '3. Bộ 30 Thẻ Bài (Văn - Vạn - Sách)',
+                position3D: new THREE.Vector3(3.6, 2.5, -1.5),
+                cameraPos: new THREE.Vector3(6.5, 3.6, 3.6),
+                lookAt: new THREE.Vector3(3.5, 1.8, -1.5),
+                sampleType: 'woodblock',
+                sampleLabel: 'Nghe tiếng xóc ống thẻ & gõ mõ',
+                svg: `<svg class="w-full h-24" viewBox="0 0 220 90" fill="none">
+                        <rect x="45" y="16" width="32" height="58" rx="4" transform="rotate(-12 45 16)" fill="#fef3c7" stroke="#991b1b" stroke-width="2"/>
+                        <rect x="92" y="12" width="34" height="62" rx="4" fill="#fffbeb" stroke="#b45309" stroke-width="2.5"/>
+                        <rect x="142" y="16" width="32" height="58" rx="4" transform="rotate(12 142 16)" fill="#fef3c7" stroke="#991b1b" stroke-width="2"/>
+                        <circle cx="109" cy="36" r="8" fill="#dc2626"/>
+                      </svg>`,
+                paragraphs: [
+                    'Bộ Bài Chòi chuẩn gồm <strong>30 quân bài</strong> (tương ứng 60 thẻ chia làm 2 ống: 1 ống phát cho các chòi, 1 ống Anh Hiệu cầm để xóc). Bộ bài chia thành <strong>3 Pho</strong>: <em>Pho Văn (10 quân), Pho Vạn (10 quân), Pho Sách (10 quân)</em>.',
+                    'Mỗi quân bài được in khắc gỗ mộc mạc trên giấy bồi dán lên thẻ tre cứng, mang hình vẽ biểu tượng và chữ Hán-Nôm cổ.'
+                ],
+                fact: 'Mỗi chòi nhận 3 thẻ bài khác nhau. Khi Anh Hiệu hô trúng cả 3 thẻ của chòi mình, người chơi gõ mõ liên hồi hô vang "Tới rồi!" để nhận cờ thưởng.'
+            },
+            nhaccu: {
+                id: 'nhaccu',
+                badge: '4. Âm Nhạc Ngũ Cung',
+                title: '4. Dàn Nhạc Cụ Ngũ Cung & Trống Chiến',
+                position3D: new THREE.Vector3(-4.2, 2.5, -1.8),
+                cameraPos: new THREE.Vector3(-6.8, 3.6, 3.5),
+                lookAt: new THREE.Vector3(-4.0, 1.8, -1.8),
+                sampleType: 'ensemble',
+                sampleLabel: 'Nghe hòa tấu trống, mõ & đàn nhị',
+                svg: `<svg class="w-full h-24" viewBox="0 0 220 90" fill="none">
+                        <ellipse cx="65" cy="52" rx="22" ry="18" fill="#991b1b" stroke="#fde047" stroke-width="2.5"/>
+                        <ellipse cx="65" cy="40" rx="20" ry="7" fill="#fef3c7"/>
+                        <line x1="130" y1="15" x2="130" y2="78" stroke="#eab308" stroke-width="3"/>
+                        <rect x="122" y="62" width="16" height="16" rx="3" fill="#78350f" stroke="#fde047"/>
+                      </svg>`,
+                paragraphs: [
+                    'Dàn nhạc Bài Chòi Bình Định gồm <strong>Trống chiến</strong>, <strong>Đàn nhị (đàn cò)</strong>, <strong>Sanh tiền</strong>, <strong>Mõ tre</strong> và <strong>Kèn bóp</strong>, hòa âm theo thang âm ngũ cung Việt Nam (Hò – Xự – Xang – Xê – Cống).',
+                    'Tiếng trống chiến giữ nhịp rộn ràng, đàn nhị luyến láy nâng đỡ giọng hô của Anh Hiệu tạo nên không khí lễ hội đất Võ đặc trưng.'
+                ],
+                fact: 'Khi có chòi trúng thẻ, một hồi trống chiến "tùng... cắc... tùng" vang lên báo hiệu cho lính lệ mang thẻ bài và cờ hiệu đến trao tận chòi.'
+            },
+            unesco: {
+                id: 'unesco',
+                badge: '5. Di Sản Nhân Loại',
+                title: '5. Nghệ Thuật Hô Thai & Di Sản UNESCO',
+                position3D: new THREE.Vector3(0, 6.8, 0),
+                cameraPos: new THREE.Vector3(11.5, 8.5, 12.5),
+                lookAt: new THREE.Vector3(0, 2.5, -2.0),
+                sampleType: 'festival',
+                sampleLabel: 'Nghe âm hưởng lễ hội mùa xuân',
+                svg: `<svg class="w-full h-24" viewBox="0 0 220 90" fill="none">
+                        <polygon points="110,12 165,36 55,36" stroke="#fde047" stroke-width="2.5" fill="rgba(234,179,8,0.15)"/>
+                        <line x1="72" y1="36" x2="72" y2="68" stroke="#fde047" stroke-width="3"/>
+                        <line x1="97" y1="36" x2="97" y2="68" stroke="#fde047" stroke-width="3"/>
+                        <line x1="123" y1="36" x2="123" y2="68" stroke="#fde047" stroke-width="3"/>
+                        <line x1="148" y1="36" x2="148" y2="68" stroke="#fde047" stroke-width="3"/>
+                        <rect x="52" y="68" width="116" height="8" rx="2" fill="#eab308"/>
+                      </svg>`,
+                paragraphs: [
+                    'Ngày <strong>07/12/2017</strong>, Nghệ thuật Bài Chòi Trung Bộ Việt Nam (với Bình Định là một trong những cái nôi tiêu biểu nhất) được UNESCO ghi danh là <strong>Di sản Văn hóa Phi vật thể đại diện của Nhân loại</strong>.',
+                    'Bài Chòi kết hợp hài hòa giữa trò chơi dân gian, âm nhạc, thơ ca ứng tác và nghệ thuật biểu diễn, nuôi dưỡng tình làng nghĩa xóm mỗi dịp Tết đến Xuân về.'
+                ],
+                fact: 'Từ những chiếu Bài Chòi dân gian trên các chòi tre, nghệ nhân Bình Định đã phát triển nên nghệ thuật Ca kịch Bài Chòi chuyên nghiệp nổi tiếng cả nước.'
+            }
+        };
+
+        // Hàm tạo biểu tượng minh họa SVG mỹ thuật dân gian cho từng lá bài
+        function makeCardArt(type, primary = '#991b1b', accent = '#d97706') {
+            const arts = {
+                scholar: `<svg viewBox="0 0 80 80" class="w-full h-full"><circle cx="40" cy="24" r="10" fill="${primary}"/><path d="M24 66 L32 38 L48 38 L56 66 Z" fill="#1e3a8a"/><rect x="44" y="42" width="15" height="11" rx="1" fill="#fef08a" stroke="${accent}" stroke-width="1.5"/></svg>`,
+                hat: `<svg viewBox="0 0 80 80" class="w-full h-full"><path d="M16 48 Q40 24 64 48 Z" fill="${accent}" stroke="${primary}" stroke-width="2"/><circle cx="40" cy="54" r="9" fill="#78350f"/></svg>`,
+                rooster: `<svg viewBox="0 0 80 80" class="w-full h-full"><circle cx="42" cy="44" r="14" fill="${primary}"/><circle cx="52" cy="28" r="7" fill="${primary}"/><polygon points="59,28 66,31 59,33" fill="#eab308"/><path d="M20 42 Q28 28 32 44" stroke="${accent}" stroke-width="4" fill="none"/></svg>`,
+                elephant: `<svg viewBox="0 0 80 80" class="w-full h-full"><rect x="22" y="32" width="32" height="22" rx="8" fill="#475569"/><circle cx="52" cy="38" r="10" fill="#475569"/><path d="M60 40 Q67 52 59 56" stroke="#475569" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M56 44 L65 42" stroke="#fef08a" stroke-width="3"/></svg>`,
+                flower: `<svg viewBox="0 0 80 80" class="w-full h-full"><line x1="40" y1="36" x2="40" y2="68" stroke="#15803d" stroke-width="4"/><circle cx="40" cy="28" r="7" fill="#eab308"/><circle cx="40" cy="15" r="6" fill="${primary}"/><circle cx="27" cy="28" r="6" fill="${primary}"/><circle cx="53" cy="28" r="6" fill="${primary}"/><circle cx="40" cy="41" r="6" fill="${primary}"/></svg>`,
+                boat: `<svg viewBox="0 0 80 80" class="w-full h-full"><path d="M16 52 Q40 66 64 52 L56 44 L24 44 Z" fill="${accent}"/><polygon points="40,16 40,42 56,42" fill="${primary}"/></svg>`,
+                pagoda: `<svg viewBox="0 0 80 80" class="w-full h-full"><polygon points="40,14 62,32 18,32" fill="${primary}"/><polygon points="40,26 66,44 14,44" fill="${accent}"/><rect x="26" y="44" width="28" height="22" fill="#78350f"/></svg>`,
+                sword: `<svg viewBox="0 0 80 80" class="w-full h-full"><line x1="22" y1="58" x2="58" y2="22" stroke="#334155" stroke-width="5" stroke-linecap="round"/><line x1="26" y1="44" x2="36" y2="54" stroke="#eab308" stroke-width="4"/><circle cx="19" cy="61" r="4" fill="${primary}"/></svg>`,
+                drum: `<svg viewBox="0 0 80 80" class="w-full h-full"><ellipse cx="40" cy="44" rx="20" ry="16" fill="${primary}" stroke="#eab308" stroke-width="2"/><ellipse cx="40" cy="33" rx="18" ry="6" fill="#fef3c7"/></svg>`,
+                crown: `<svg viewBox="0 0 80 80" class="w-full h-full"><polygon points="20,52 24,26 40,40 56,26 60,52" fill="#eab308" stroke="${primary}" stroke-width="2"/><rect x="20" y="52" width="40" height="8" fill="${primary}"/></svg>`
+            };
+            return arts[type] || arts.flower;
+        }
+
+        // Bộ 30 thẻ bài chuẩn chia thành 3 Pho: Pho Văn (10), Pho Vạn (10), Pho Sách (10)
+        const FULL_DECK_30 = [
+            // === PHO VĂN (10 QUÂN) ===
+            { id: 'van_1', pho: 'Pho Văn', han: '一 徒', name: 'NHỨT TRÒ', verse: '“Đi đâu mang sách đi hoài,<br>Cử nhân không đậu, tú tài cũng không!”', hint: 'Nói về người học trò mang sách đi thi nhưng chưa đỗ đạt.', meaning: 'Đề cao tinh thần hiếu học của người Bình Định, đồng thời hóm hỉnh nhắc nhở việc học phải đi đôi với thực hành.', art: makeCardArt('scholar') },
+            { id: 'van_2', pho: 'Pho Văn', han: '二 貧', name: 'NHÌ NGHÈO', verse: '“Trên trời có đám mây xanh,<br>Ở dưới có đám mây trắng, xung quanh mây vàng...”', hint: 'Quân bài nhắc tới cảnh nghèo thanh bạch mà tâm hồn vẫn lạc quan.', meaning: 'Ca ngợi sự lạc quan, yêu đời và tấm lòng trong sạch của người lao động nghèo miền Trung.', art: makeCardArt('hat') },
+            { id: 'van_3', pho: 'Pho Văn', han: '三 魁', name: 'BA KHÔI', verse: '“Ba năm đèn sách chuyên cần,<br>Bảng vàng chiếm được khôi nguyên đứng đầu.”', hint: 'Quân bài thứ ba thuộc Pho Văn, tượng trưng cho đỗ đạt khôi nguyên.', meaning: 'Khuyến khích ý chí phấn đấu vươn lên bằng tri thức và tài năng.', art: makeCardArt('crown') },
+            { id: 'van_4', pho: 'Pho Văn', han: '四 舉', name: 'TỨ CỬ', verse: '“Tứ thư ngũ kinh làu thông,<br>Ra trường thi cử rạng dòng tổ tiên.”', hint: 'Quân thứ tư Pho Văn, gắn với khoa cử thời xưa.', meaning: 'Tôn vinh truyền thống tôn sư trọng đạo và niềm tự hào khoa bảng.', art: makeCardArt('scholar', '#1e3a8a') },
+            { id: 'van_5', pho: 'Pho Văn', han: '五 午', name: 'NGŨ TRƯA', verse: '“Đứng bóng mặt trời giữa trưa,<br>Ai về Bình Định cho vừa lòng nhau.”', hint: 'Quân thứ năm Pho Văn, nhắc tới thời khắc chính ngọ giữa trưa.', meaning: 'Gợi nhịp sống lao động cần cù của nhà nông trên đồng ruộng đất Võ.', art: makeCardArt('hat', '#b45309') },
+            { id: 'van_6', pho: 'Pho Văn', han: '六 狀', name: 'LỤC CHẠNG', verse: '“Lục bình trôi nổi trên sông,<br>Thương người quân tử một lòng thủy chung.”', hint: 'Quân thứ sáu Pho Văn, đọc trại từ chữ Trạng / Chạng.', meaning: 'Ca ngợi sự thủy chung son sắt trong tình nghĩa vợ chồng, bạn bè.', art: makeCardArt('boat') },
+            { id: 'van_7', pho: 'Pho Văn', han: '七 俸', name: 'THẤT BỔNG', verse: '“Bảy năm giữ trọn đạo nhà,<br>Lộc trời ban xuống chan hòa niềm vui.”', hint: 'Quân thứ bảy Pho Văn, tượng trưng cho bổng lộc.', meaning: 'Khuyên con người sống ngay thẳng, giữ chữ tín sẽ gặp phúc lành.', art: makeCardArt('flower', '#b45309') },
+            { id: 'van_8', pho: 'Pho Văn', han: '八 蓬', name: 'BÁT BỒNG', verse: '“Bồng bồng cõng chồng đi chơi,<br>Đi đến chỗ lội đánh rơi mất chồng!”', hint: 'Quân thứ tám Pho Văn, gắn với câu ca dao vui "Bồng bồng cõng chồng...".', meaning: 'Mang tiếng cười hóm hỉnh, duyên dáng đậm chất trào phúng dân gian miền Trung.', art: makeCardArt('boat', '#991b1b') },
+            { id: 'van_9', pho: 'Pho Văn', han: '九 寺', name: 'CỬU CHÙA', verse: '“Chín tầng mây phủ non cao,<br>Chuông chùa vang vọng ngọt ngào sớm hôm.”', hint: 'Quân thứ chín Pho Văn, nhắc tới ngôi chùa linh thiêng.', meaning: 'Hướng con người tới tâm thiện lành, bình an và lòng từ bi.', art: makeCardArt('pagoda') },
+            { id: 'van_10', pho: 'Pho Văn', han: '十 紅', name: 'BẠCH HUÊ', verse: '“Bông huệ trắng ngát hương đêm,<br>Giữ lòng trong sạch dịu êm tình người.”', hint: 'Quân thứ mười Pho Văn, hình tượng bông hoa huệ trắng thanh khiết.', meaning: 'Biểu tượng cho phẩm hạnh thanh cao, thủy chung của người phụ nữ Bình Định.', art: makeCardArt('flower', '#dc2626') },
+
+            // === PHO VẠN (10 QUÂN) ===
+            { id: 'van2_1', pho: 'Pho Vạn', han: '一 軸', name: 'NHỨT TRỤC', verse: '“Một trục xoay chuyển đất trời,<br>Dựng xây cơ nghiệp rạng ngời quê hương.”', hint: 'Quân đầu tiên của Pho Vạn, tượng trưng cho trục chính vững vàng.', meaning: 'Nhắc nhở sự kiên định, bản lĩnh vững vàng trước mọi thử thách.', art: makeCardArt('drum') },
+            { id: 'van2_2', pho: 'Pho Vạn', han: '二 梅', name: 'NHÌ MAI', verse: '“Xuân về hoa mai nở vàng,<br>Chúc cho trăm họ xóm làng bình an.”', hint: 'Quân thứ hai Pho Vạn, gắn với hoa mai vàng ngày Tết.', meaning: 'Biểu tượng của mùa xuân đất Võ, niềm hy vọng và khởi đầu tốt đẹp.', art: makeCardArt('flower', '#eab308') },
+            { id: 'van2_3', pho: 'Pho Vạn', han: '三 腹', name: 'BA BỤNG', verse: '“Bụng làm dạ chịu xưa nay,<br>Ở hiền gặp lành, thẳng ngay chẳng sờn.”', hint: 'Quân thứ ba Pho Vạn, nhắc tới tấm lòng ("bụng dạ") con người.', meaning: 'Đề cao sự trung thực, bao dung và lòng nhân hậu.', art: makeCardArt('drum', '#b45309') },
+            { id: 'van2_4', pho: 'Pho Vạn', han: '四 象', name: 'TỨ TƯỢNG', verse: '“Chiều chiều ra đứng ngõ sau,<br>Trông về quê mẹ ruột đau chín chiều.”', hint: 'Quân thứ tư Pho Vạn, biểu tượng con voi (Tượng) Tây Sơn.', meaning: 'Gắn với truyền thống hào hùng Tây Sơn - Bình Định và nỗi nhớ quê hương, cha mẹ.', art: makeCardArt('elephant') },
+            { id: 'van2_5', pho: 'Pho Vạn', han: '五 劍', name: 'NGŨ KIẾM', verse: '“Trai Bình Định múa roi đi quyền,<br>Thanh gươm giữ nước lưu truyền sử xanh.”', hint: 'Quân thứ năm Pho Vạn, hình tượng thanh bảo kiếm đất Võ.', meaning: 'Ca ngợi tinh thần thượng võ, ý chí bảo vệ non sông của người dân Bình Định.', art: makeCardArt('sword') },
+            { id: 'van2_6', pho: 'Pho Vạn', han: '六 船', name: 'LỤC GHE', verse: '“Thuyền ai lướt sóng Quy Nhơn,<br>Chở đầy tôm cá, nghĩa tình biển khơi.”', hint: 'Quân thứ sáu Pho Vạn, nhắc tới chiếc thuyền/ghe đi biển.', meaning: 'Phản ánh đời sống ngư nghiệp trù phú của vùng biển Bình Định.', art: makeCardArt('boat', '#1d4ed8') },
+            { id: 'van2_7', pho: 'Pho Vạn', han: '七 頭', name: 'THẤT ĐẦU', verse: '“Bảy phen lên thác xuống ghềnh,<br>Đồng tâm hiệp lực vượt trên sóng trào.”', hint: 'Quân thứ bảy Pho Vạn, nhắc tới tinh thần tiên phong dẫn đầu.', meaning: 'Khuyến khích sự đoàn kết và ý chí vượt khó của cộng đồng.', art: makeCardArt('crown', '#b45309') },
+            { id: 'van2_8', pho: 'Pho Vạn', han: '八 蹌', name: 'BÁT BỒNG VẠN', verse: '“Tám phương hội tụ về đây,<br>Chòi tre vang tiếng hát hay đầu mùa.”', hint: 'Quân thứ tám Pho Vạn, tượng trưng cho tám hướng sum vầy.', meaning: 'Thể hiện tính gắn kết cộng đồng của lễ hội Bài Chòi ngày xuân.', art: makeCardArt('pagoda', '#991b1b') },
+            { id: 'van2_9', pho: 'Pho Vạn', han: '九 腿', name: 'CỬU CHÂN', verse: '“Chín bậc thang tre bước lên,<br>Ngồi trên chòi vững, lòng bền niềm vui.”', hint: 'Quân thứ chín Pho Vạn, nhắc tới bước chân vững chãi.', meaning: 'Khuyên răn sự cẩn trọng, vững bước trên đường đời.', art: makeCardArt('elephant', '#78350f') },
+            { id: 'van2_10', pho: 'Pho Vạn', han: '十 庵', name: 'ÔNG ẦM', verse: '“Ông Ầm tiếng nói vang rền,<br>Dân làng no ấm, vững bền cơ đồ!”', hint: 'Quân thứ mười Pho Vạn – quân bài rộn rã, quyền uy nhất sới bài.', meaning: 'Tượng trưng cho sức mạnh, sự hào sảng và phúc lộc sung túc đầu năm.', art: makeCardArt('crown', '#dc2626') },
+
+            // === PHO SÁCH (10 QUÂN) ===
+            { id: 'sach_1', pho: 'Pho Sách', han: '一 餅', name: 'NHỨT NỌC', verse: '“Một lòng giữ trọn nghĩa nhân,<br>Dẫu bao gian khó chẳng phân tấc lòng.”', hint: 'Quân đầu tiên của Pho Sách, biểu tượng chiếc cọc ("nọc") giữ vững.', meaning: 'Đề cao lòng trung thành, sự kiên trung bất khuất.', art: makeCardArt('sword', '#991b1b') },
+            { id: 'sach_2', pho: 'Pho Sách', han: '二 梯', name: 'NHÌ THANG', verse: '“Bắc thang lên hỏi ông trời,<br>Có tiền cho gái hay thời mất không?”', hint: 'Quân thứ hai Pho Sách, hình tượng chiếc thang tre quen thuộc.', meaning: 'Câu thai trào phúng mang lại tiếng cười sảng khoái cho người chơi.', art: makeCardArt('pagoda', '#b45309') },
+            { id: 'sach_3', pho: 'Pho Sách', han: '三 雞', name: 'BA GÀ', verse: '“Con gà cục tác lá chanh,<br>Con lợn ủn ỉn mua hành cho tôi...”', hint: 'Quân thứ ba Pho Sách, gắn với chú gà trống trong sân vườn.', meaning: 'Tượng trưng cho sự cần cù, thức khuya dậy sớm và cuộc sống ấm no.', art: makeCardArt('rooster') },
+            { id: 'sach_4', pho: 'Pho Sách', han: '四 椅', name: 'TỨ GHẾ', verse: '“Bốn chân ghế vững giữa nhà,<br>Kính trên nhường dưới thuận hòa ấm êm.”', hint: 'Quân thứ tư Pho Sách, hình tượng chiếc ghế bốn chân vững vàng.', meaning: 'Nhắc nhở đạo lý gia phong, sự hòa thuận trong gia đình.', art: makeCardArt('drum', '#78350f') },
+            { id: 'sach_5', pho: 'Pho Sách', han: '五 斧', name: 'NGŨ RÌU', verse: '“Năm canh tiếng búa tiếng rìu,<br>Dựng nhà dựng cửa dập dìu niềm vui.”', hint: 'Quân thứ năm Pho Sách, hình tượng chiếc rìu của người thợ mộc.', meaning: 'Tôn vinh bàn tay lao động khéo léo của các làng nghề truyền thống.', art: makeCardArt('sword', '#b45309') },
+            { id: 'sach_6', pho: 'Pho Sách', han: '六 柳', name: 'LỤC LIỄU', verse: '“Cành liễu rủ bóng bên hồ,<br>Gió xuân nhè nhẹ điểm tô đất trời.”', hint: 'Quân thứ sáu Pho Sách, hình ảnh nhành liễu mềm mại.', meaning: 'Ca ngợi vẻ đẹp thanh tú, dịu dàng và sức sống mùa xuân.', art: makeCardArt('flower', '#15803d') },
+            { id: 'sach_7', pho: 'Pho Sách', han: '七 笠', name: 'THẤT VUNG', verse: '“Bảy ngày mưa nắng dãi dầu,<br>Chiếc vung che nồi cơm dẻo ngọt ngào.”', hint: 'Quân thứ bảy Pho Sách, hình tượng chiếc vung nồi gắn với bữa cơm quê.', meaning: 'Trân trọng hạt gạo, bữa cơm gia đình và công sức người nông dân.', art: makeCardArt('hat', '#991b1b') },
+            { id: 'sach_8', pho: 'Pho Sách', han: '八 虎', name: 'BÁT CỌP', verse: '“Oai phong chúa tể sơn lâm,<br>Đất Võ Bình Định tiếng tăm muôn đời.”', hint: 'Quân thứ tám Pho Sách, biểu tượng mãnh hổ uy dũng.', meaning: 'Tượng trưng cho khí phách anh hùng, dũng cảm của con người đất Võ.', art: makeCardArt('elephant', '#991b1b') },
+            { id: 'sach_9', pho: 'Pho Sách', han: '九 學', name: 'CỬU ĐỌC', verse: '“Chín chương sách thánh hiền xưa,<br>Đọc thông hiểu thấu sớm trưa rèn mình.”', hint: 'Quân thứ chín Pho Sách, khuyên răn việc đọc sách tu dưỡng.', meaning: 'Khuyến khích văn hóa đọc và sự tự học suốt đời.', art: makeCardArt('scholar', '#047857') },
+            { id: 'sach_10', pho: 'Pho Sách', han: '十 太子', name: 'THÁI TỬ', verse: '“Lên non mới biết non cao,<br>Nuôi con mới biết công lao mẫu từ.”', hint: 'Quân thứ mười Pho Sách – quân bài tôn quý nhắc về đạo hiếu.', meaning: 'Đề cao lòng hiếu thảo, công ơn dưỡng dục sinh thành của cha mẹ.', art: makeCardArt('crown', '#991b1b') }
+        ];
+
+        /**
+         * ============================================================================
+         * 2. BỘ TỔNG HỢP ÂM THANH DÂN GIAN BẰNG WEB AUDIO API (KHÔNG CẦN FILE NGOÀI)
+         * ============================================================================
+         */
+        class FolkAudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.isPlayingBg = false;
+                this.bgInterval = null;
+                // Thang âm Ngũ cung Việt Nam (Hò - Xự - Xang - Xê - Cống)
+                this.pentatonic = [261.63, 293.66, 349.23, 392.00, 440.00, 523.25, 587.33];
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            // Tiếng Trống Chiến ("Tùng / Cắc")
+            playDrum(timeOffset = 0, baseFreq = 115, duration = 0.45) {
+                this.init();
+                const t = this.ctx.currentTime + timeOffset;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(baseFreq * 1.4, t);
+                osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.45, t + duration);
+
+                gain.gain.setValueAtTime(0.85, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(t);
+                osc.stop(t + duration);
+            }
+
+            // Tiếng Mõ Tre / Tang Trống ("Cắc / Cốc")
+            playWoodblock(timeOffset = 0, freq = 780) {
+                this.init();
+                const t = this.ctx.currentTime + timeOffset;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(freq, t);
+                osc.frequency.exponentialRampToValueAtTime(freq * 0.65, t + 0.09);
+
+                gain.gain.setValueAtTime(0.55, t);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(t);
+                osc.stop(t + 0.1);
+            }
+
+            // Tiếng Xóc Ống Thẻ Tre Lách Cách
+            playBambooShake() {
+                this.init();
+                const delays = [0, 0.09, 0.17, 0.26, 0.35, 0.45, 0.56];
+                delays.forEach((d, idx) => {
+                    this.playWoodblock(d, 950 + (idx % 3) * 180);
+                });
+            }
+
+            // Hồi Trống Chiến Mừng Chiến Thắng ("Tới rồi!")
+            playVictoryFanfare() {
+                this.init();
+                this.playDrum(0, 130, 0.35);
+                this.playDrum(0.22, 130, 0.35);
+                this.playDrum(0.44, 150, 0.45);
+                this.playErhuNote(392.00, 0.55, 0.4);
+                this.playErhuNote(440.00, 0.90, 0.4);
+                this.playErhuNote(523.25, 1.25, 0.85);
+                this.playWoodblock(1.3, 920);
+                this.playWoodblock(1.5, 1020);
+                this.playDrum(1.75, 140, 0.6);
+            }
+
+            // Tiếng Đàn Nhị / Giai điệu Ngũ Cung luyến láy
+            playErhuNote(freq, timeOffset = 0, duration = 0.55) {
+                this.init();
+                const t = this.ctx.currentTime + timeOffset;
+                const osc = this.ctx.createOscillator();
+                const filter = this.ctx.createBiquadFilter();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(freq * 0.97, t);
+                osc.frequency.linearRampToValueAtTime(freq, t + 0.08);
+                // Rung nhẹ (vibrato) đặc trưng đàn nhị
+                osc.frequency.linearRampToValueAtTime(freq * 1.012, t + duration * 0.6);
+                osc.frequency.linearRampToValueAtTime(freq, t + duration);
+
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(950, t);
+                filter.Q.setValueAtTime(2.5, t);
+
+                gain.gain.setValueAtTime(0.001, t);
+                gain.gain.linearRampToValueAtTime(0.18, t + 0.08);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(t);
+                osc.stop(t + duration);
+            }
+
+            // Phát tổ hợp âm thanh theo chủ đề
+            playSample(type) {
+                this.init();
+                if (type === 'drum_roll') {
+                    this.playDrum(0, 120, 0.35);
+                    this.playWoodblock(0.22, 820);
+                    this.playDrum(0.42, 110, 0.35);
+                    this.playDrum(0.65, 130, 0.45);
+                    this.playWoodblock(0.9, 920);
+                } else if (type === 'ho_thai') {
+                    // Giai điệu hô thai ngũ cung kết hợp trống điểm nhịp
+                    this.playErhuNote(392.00, 0.0, 0.45);
+                    this.playErhuNote(440.00, 0.42, 0.45);
+                    this.playErhuNote(523.25, 0.85, 0.65);
+                    this.playErhuNote(440.00, 1.45, 0.4);
+                    this.playErhuNote(349.23, 1.85, 0.7);
+                    this.playDrum(2.45, 125, 0.4);
+                    this.playWoodblock(2.7, 850);
+                } else if (type === 'woodblock') {
+                    for (let i = 0; i < 5; i++) {
+                        this.playWoodblock(i * 0.14, 760 + (i % 2) * 140);
+                    }
+                    this.playDrum(0.75, 120, 0.4);
+                } else {
+                    // Hòa tấu lễ hội
+                    this.playDrum(0, 115, 0.35);
+                    this.playErhuNote(293.66, 0.1, 0.5);
+                    this.playWoodblock(0.35, 840);
+                    this.playErhuNote(392.00, 0.55, 0.55);
+                    this.playDrum(0.9, 125, 0.4);
+                    this.playErhuNote(523.25, 1.05, 0.7);
+                }
+            }
+
+            toggleBackgroundMusic() {
+                this.init();
+                if (this.isPlayingBg) {
+                    this.isPlayingBg = false;
+                    clearInterval(this.bgInterval);
+                    return false;
+                } else {
+                    this.isPlayingBg = true;
+                    let step = 0;
+                    const melodyPattern = [0, 2, 3, 4, 3, 2, 1, 3];
+                    this.bgInterval = setInterval(() => {
+                        if (!this.isPlayingBg) return;
+                        const noteIdx = melodyPattern[step % melodyPattern.length];
+                        const freq = this.pentatonic[noteIdx];
+                        this.playErhuNote(freq, 0, 0.75);
+                        if (step % 4 === 0) {
+                            this.playDrum(0, 105, 0.32);
+                        } else if (step % 2 === 1) {
+                            this.playWoodblock(0, 790);
+                        }
+                        step++;
+                    }, 850);
+                    return true;
+                }
+            }
+        }
+
+        const audioEngine = new FolkAudioEngine();
+
+        /**
+         * ============================================================================
+         * 3. KHỞI TẠO KHÔNG GIAN 3D BÀI CHÒI BÌNH ĐỊNH (THREE.JS)
+         * ============================================================================
+         */
+        let scene, camera, renderer, controls;
+        let clock = new THREE.Clock();
+        let lanterns = [];
+        let flags = [];
+        let hutMeshes = []; // Lưu thông tin 8 chòi con để chọn chỗ ngồi & đặt thẻ 3D
+        let playerHeldCardsGroup = null; // 3 thẻ bài tre trên lan can chòi người chơi
+        let anhHieuGroup, rightArmGroup;
+        let fireflies;
+        let isAutoTour = false;
+        let tourAngle = 0;
+        let isShakingTube = false;
+        let cameraTween = {
+            active: false,
+            startPos: new THREE.Vector3(),
+            endPos: new THREE.Vector3(),
+            startTarget: new THREE.Vector3(),
+            endTarget: new THREE.Vector3(),
+            progress: 0
+        };
+
+        // Tạo đèn lồng lễ hội 3D phát sáng ấm áp
+        function createLantern(colorHex = 0xdc2626) {
+            const group = new THREE.Group();
+
+            const bodyGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.48, 16);
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: colorHex,
+                emissive: colorHex,
+                emissiveIntensity: 0.65,
+                roughness: 0.35
+            });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            group.add(body);
+
+            const capGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.06, 16);
+            const capMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.5, roughness: 0.3 });
+            const topCap = new THREE.Mesh(capGeo, capMat);
+            topCap.position.y = 0.26;
+            const botCap = topCap.clone();
+            botCap.position.y = -0.26;
+            group.add(topCap, botCap);
+
+            const tasselGeo = new THREE.CylinderGeometry(0.02, 0.05, 0.25, 8);
+            const tasselMat = new THREE.MeshStandardMaterial({ color: 0xfef08a });
+            const tassel = new THREE.Mesh(tasselGeo, tasselMat);
+            tassel.position.y = -0.4;
+            group.add(tassel);
+
+            return group;
+        }
+
+        // Tạo Texture hoa văn trống đồng / Chăm Pa cho sân gạch bằng Canvas 2D
+        function createStageFloorTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+
+            // Nền gạch nung đỏ sẫm Bình Định
+            const grad = ctx.createRadialGradient(512, 512, 40, 512, 512, 512);
+            grad.addColorStop(0, '#8c2318');
+            grad.addColorStop(0.65, '#661810');
+            grad.addColorStop(1, '#3b0d09');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 1024, 1024);
+
+            // Vòng tròn hoa văn trống đồng & họa tiết Chăm Pa cách điệu
+            ctx.strokeStyle = 'rgba(250, 204, 21, 0.55)';
+            ctx.lineWidth = 6;
+            [140, 240, 340, 440, 490].forEach(r => {
+                ctx.beginPath();
+                ctx.arc(512, 512, r, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+
+            // Ngôi sao 12 cánh ở tâm sân khấu
+            ctx.fillStyle = 'rgba(250, 204, 21, 0.45)';
+            ctx.beginPath();
+            for (let i = 0; i < 24; i++) {
+                const r = i % 2 === 0 ? 125 : 55;
+                const a = (i * Math.PI) / 12;
+                const x = 512 + Math.cos(a) * r;
+                const y = 512 + Math.sin(a) * r;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // Họa tiết hình học lặp lại trên vành ngoài
+            for (let i = 0; i < 36; i++) {
+                const a = (i * Math.PI * 2) / 36;
+                ctx.save();
+                ctx.translate(512 + Math.cos(a) * 390, 512 + Math.sin(a) * 390);
+                ctx.rotate(a + Math.PI / 2);
+                ctx.strokeStyle = 'rgba(253, 224, 71, 0.5)';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(-14, -14, 28, 28);
+                ctx.restore();
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            return tex;
+        }
+
+        // Tạo bảng tên quân bài treo trước mỗi chòi tre
+        function createCardSignTexture(cardTitle, subText, isHighlighted = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = isHighlighted ? '#fde047' : '#fef3c7';
+            ctx.fillRect(0, 0, 256, 128);
+
+            ctx.strokeStyle = '#991b1b';
+            ctx.lineWidth = 10;
+            ctx.strokeRect(8, 8, 240, 112);
+
+            ctx.fillStyle = '#991b1b';
+            ctx.font = 'bold 28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(cardTitle, 128, 60);
+
+            ctx.fillStyle = '#b45309';
+            ctx.font = 'bold 18px sans-serif';
+            ctx.fillText(subText, 128, 96);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // Tạo 3 thẻ bài tre 3D đặt ngay trên lan can chòi khi người chơi ngồi vào chòi
+        function create3DPlayerHandCards(cardsList, matchedIds = []) {
+            const group = new THREE.Group();
+
+            // Ống tre đựng thẻ đặt bên cạnh
+            const holder = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.08, 0.08, 0.34, 14),
+                new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.5 })
+            );
+            holder.position.set(-0.52, 0.16, 0);
+            group.add(holder);
+
+            // 3 thẻ bài tre xếp quạt trên lan can chòi hướng về camera người chơi
+            cardsList.forEach((card, idx) => {
+                const isMatched = matchedIds.includes(card.id);
+                const cardCanvas = document.createElement('canvas');
+                cardCanvas.width = 160;
+                cardCanvas.height = 280;
+                const ctx = cardCanvas.getContext('2d');
+
+                ctx.fillStyle = isMatched ? '#bbf7d0' : '#fffbeb';
+                ctx.fillRect(0, 0, 160, 280);
+                ctx.strokeStyle = isMatched ? '#15803d' : '#991b1b';
+                ctx.lineWidth = 12;
+                ctx.strokeRect(6, 6, 148, 268);
+
+                ctx.fillStyle = '#b45309';
+                ctx.font = 'bold 16px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(card.pho.toUpperCase(), 80, 38);
+
+                ctx.fillStyle = '#991b1b';
+                ctx.font = 'bold 24px serif';
+                ctx.fillText(card.han, 80, 82);
+
+                ctx.fillStyle = '#1e1b4b';
+                ctx.font = 'bold 20px sans-serif';
+                const words = card.name.split(' ');
+                words.forEach((w, wi) => {
+                    ctx.fillText(w, 80, 145 + wi * 30);
+                });
+
+                if (isMatched) {
+                    ctx.fillStyle = '#15803d';
+                    ctx.font = 'bold 20px sans-serif';
+                    ctx.fillText('✓ ĐÃ TRÚNG', 80, 242);
+                }
+
+                const tex = new THREE.CanvasTexture(cardCanvas);
+                const cardMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.24, 0.42, 0.02),
+                    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4 })
+                );
+
+                const offsetX = (idx - 1) * 0.28;
+                cardMesh.position.set(offsetX, isMatched ? 0.28 : 0.21, 0);
+                cardMesh.rotation.y = (1 - idx) * 0.16;
+                cardMesh.rotation.x = -0.22;
+                group.add(cardMesh);
+            });
+
+            return group;
+        }
+
+        // Tạo nhân vật 3D cách điệu (Anh Hiệu, Nhạc công, Người chơi)
+        function createStylizedCharacter({ robeColor = 0xb91c1c, hatType = 'khandong', isSitting = false }) {
+            const char = new THREE.Group();
+
+            // Thân áo dài
+            const bodyGeo = new THREE.CylinderGeometry(0.26, 0.42, isSitting ? 0.95 : 1.25, 16);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: robeColor, roughness: 0.5 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = isSitting ? 0.55 : 0.75;
+            body.castShadow = true;
+            char.add(body);
+
+            // Đầu
+            const headGeo = new THREE.SphereGeometry(0.24, 16, 16);
+            const headMat = new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.6 });
+            const head = new THREE.Mesh(headGeo, headMat);
+            head.position.y = isSitting ? 1.22 : 1.58;
+            head.castShadow = true;
+            char.add(head);
+
+            // Khăn đóng hoặc Nón lá
+            if (hatType === 'khandong') {
+                const turbanGeo = new THREE.TorusGeometry(0.22, 0.06, 10, 20);
+                const turbanMat = new THREE.MeshStandardMaterial({ color: 0x1e1b4b });
+                const turban = new THREE.Mesh(turbanGeo, turbanMat);
+                turban.rotation.x = Math.PI / 2;
+                turban.position.y = isSitting ? 1.34 : 1.70;
+                char.add(turban);
+            } else if (hatType === 'nonla') {
+                const coneGeo = new THREE.ConeGeometry(0.42, 0.24, 20);
+                const coneMat = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.7 });
+                const cone = new THREE.Mesh(coneGeo, coneMat);
+                cone.position.y = isSitting ? 1.42 : 1.78;
+                char.add(cone);
+            }
+
+            return char;
+        }
+
+        // Dựng một Chòi Tre truyền thống Bình Định
+        function createBambooHut(cardName, subLabel, isCenterHut = false) {
+            const hut = new THREE.Group();
+            const scale = isCenterHut ? 1.28 : 1.0;
+
+            const bambooMat = new THREE.MeshStandardMaterial({
+                color: 0xb58938,
+                roughness: 0.65,
+                metalness: 0.05
+            });
+            const thatchMat = new THREE.MeshStandardMaterial({
+                color: 0x6b4423,
+                roughness: 0.9
+            });
+
+            // 4 cột tre chính
+            const polePositions = [
+                [-1.1, -1.1], [1.1, -1.1], [-1.1, 1.1], [1.1, 1.1]
+            ];
+            polePositions.forEach(([px, pz]) => {
+                const poleGeo = new THREE.CylinderGeometry(0.08, 0.09, 3.6, 12);
+                const pole = new THREE.Mesh(poleGeo, bambooMat);
+                pole.position.set(px, 1.8, pz);
+                pole.castShadow = true;
+                hut.add(pole);
+            });
+
+            // Sàn ngồi trên cao (cách mặt đất 1.35m)
+            const floorGeo = new THREE.BoxGeometry(2.35, 0.14, 2.35);
+            const floor = new THREE.Mesh(floorGeo, bambooMat);
+            floor.position.y = 1.35;
+            floor.castShadow = true;
+            floor.receiveShadow = true;
+            hut.add(floor);
+
+            // Lan can tre xung quanh sàn
+            const railGeo = new THREE.BoxGeometry(2.3, 0.08, 0.08);
+            const frontRail = new THREE.Mesh(railGeo, bambooMat);
+            frontRail.position.set(0, 1.85, 1.12);
+            const leftRail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2.3), bambooMat);
+            leftRail.position.set(-1.12, 1.85, 0);
+            const rightRail = leftRail.clone();
+            rightRail.position.x = 1.12;
+            hut.add(frontRail, leftRail, rightRail);
+
+            // Thang tre nhỏ phía trước chòi
+            const ladderGroup = new THREE.Group();
+            const sideL = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.65, 8), bambooMat);
+            sideL.position.set(-0.28, 0.72, 1.45);
+            sideL.rotation.x = -0.35;
+            const sideR = sideL.clone();
+            sideR.position.x = 0.28;
+            ladderGroup.add(sideL, sideR);
+            for (let i = 0; i < 4; i++) {
+                const rung = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.56, 8), bambooMat);
+                rung.rotation.z = Math.PI / 2;
+                rung.position.set(0, 0.3 + i * 0.32, 1.6 - i * 0.12);
+                ladderGroup.add(rung);
+            }
+            hut.add(ladderGroup);
+
+            // Mái lá dừa / mái tranh 4 mặt chóp
+            const roofGeo = new THREE.ConeGeometry(2.05, 1.35, 4);
+            const roof = new THREE.Mesh(roofGeo, thatchMat);
+            roof.position.y = 4.15;
+            roof.rotation.y = Math.PI / 4;
+            roof.castShadow = true;
+            hut.add(roof);
+
+            // Đỉnh chóp mái gắn cờ ngũ sắc
+            const poleTop = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 8), bambooMat);
+            poleTop.position.y = 5.05;
+            hut.add(poleTop);
+
+            const flagGeo = new THREE.PlaneGeometry(0.75, 0.45, 6, 3);
+            const flagMat = new THREE.MeshStandardMaterial({
+                color: isCenterHut ? 0xef4444 : 0xeab308,
+                side: THREE.DoubleSide
+            });
+            const flag = new THREE.Mesh(flagGeo, flagMat);
+            flag.position.set(0.38, 5.25, 0);
+            hut.add(flag);
+            flags.push(flag);
+
+            // Bảng tên quân bài treo phía trước mái chòi
+            const signTex = createCardSignTexture(cardName, subLabel);
+            const signGeo = new THREE.BoxGeometry(1.15, 0.56, 0.06);
+            const signMat = new THREE.MeshStandardMaterial({ map: signTex });
+            const sign = new THREE.Mesh(signGeo, signMat);
+            sign.position.set(0, 3.05, 1.18);
+            hut.add(sign);
+
+            // Đèn lồng treo góc mái chòi
+            const lantern = createLantern(isCenterHut ? 0xef4444 : 0xf59e0b);
+            lantern.scale.setScalar(0.65);
+            lantern.position.set(1.15, 2.85, 1.15);
+            hut.add(lantern);
+            lanterns.push({ mesh: lantern, phase: Math.random() * Math.PI * 2 });
+
+            // Thêm 1-2 người chơi ngồi trên chòi
+            const player1 = createStylizedCharacter({
+                robeColor: isCenterHut ? 0x991b1b : 0x1d4ed8,
+                hatType: isCenterHut ? 'khandong' : 'nonla',
+                isSitting: true
+            });
+            player1.position.set(-0.35, 1.38, 0.1);
+            hut.add(player1);
+
+            if (isCenterHut) {
+                const player2 = createStylizedCharacter({
+                    robeColor: 0x047857,
+                    hatType: 'khandong',
+                    isSitting: true
+                });
+                player2.position.set(0.42, 1.38, 0.1);
+                hut.add(player2);
+            }
+
+            hut.scale.setScalar(scale);
+            return hut;
+        }
+
+        function initScene() {
+            const container = document.getElementById('canvas-container');
+
+            // 1. Scene & Bầu trời đêm lễ hội hoàng hôn ấm áp
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x160709);
+            scene.fog = new THREE.FogExp2(0x1c080a, 0.017);
+
+            // 2. Camera
+            camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 150);
+            camera.position.set(0, 8.2, 16.5);
+
+            // 3. Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.15;
+            container.appendChild(renderer.domElement);
+
+            // 4. OrbitControls mượt mà 360 độ
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.06;
+            controls.maxPolarAngle = Math.PI / 2 - 0.04; // Không chui xuống dưới mặt đất
+            controls.minDistance = 3.5;
+            controls.maxDistance = 32;
+            controls.target.set(0, 2.2, -2.5);
+
+            // Dừng AutoTour khi người dùng chủ động tương tác
+            controls.addEventListener('start', () => {
+                cameraTween.active = false;
+                if (isAutoTour) {
+                    toggleAutoTour(false);
+                }
+            });
+
+            // 5. Hệ thống Ánh sáng Lễ hội Ấm áp
+            const ambientLight = new THREE.HemisphereLight(0xffedd5, 0x3b0d0d, 0.85);
+            scene.add(ambientLight);
+
+            // Ánh sáng chính chiếu xuống sân khấu
+            const spotLight = new THREE.SpotLight(0xffedd5, 2.2, 45, Math.PI / 4, 0.45, 1);
+            spotLight.position.set(4, 18, 8);
+            spotLight.castShadow = true;
+            spotLight.shadow.mapSize.width = 1024;
+            spotLight.shadow.mapSize.height = 1024;
+            scene.add(spotLight);
+
+            // Ánh sáng vàng ấm từ trung tâm sân khấu tỏa ra các chòi
+            const stageGlow = new THREE.PointLight(0xf59e0b, 1.8, 26);
+            stageGlow.position.set(0, 4.5, 0);
+            scene.add(stageGlow);
+
+            // 6. Mặt đất & Sân khấu tròn họa văn Trống Đồng / Chăm Pa
+            const groundGeo = new THREE.CircleGeometry(48, 64);
+            const groundMat = new THREE.MeshStandardMaterial({
+                color: 0x26120c,
+                roughness: 0.92
+            });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Sân khấu chính ở trung tâm
+            const stageTex = createStageFloorTexture();
+            const stageGeo = new THREE.CylinderGeometry(6.8, 7.2, 0.32, 64);
+            const stageMat = new THREE.MeshStandardMaterial({
+                map: stageTex,
+                roughness: 0.55
+            });
+            const stage = new THREE.Mesh(stageGeo, stageMat);
+            stage.position.y = 0.16;
+            stage.receiveShadow = true;
+            scene.add(stage);
+
+            // Viền vàng quanh sân khấu
+            const rimGeo = new THREE.TorusGeometry(6.9, 0.12, 12, 64);
+            const rimMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.6, roughness: 0.3 });
+            const rim = new THREE.Mesh(rimGeo, rimMat);
+            rim.rotation.x = Math.PI / 2;
+            rim.position.y = 0.32;
+            scene.add(rim);
+
+            // 7. Dựng 9 Chòi Tre xếp vòng cung quanh sân khấu
+            const hutCards = [
+                { name: 'CHÒI CÁI', sub: 'Trung Tâm Hội', isCenter: true },
+                { name: 'NHỨT TRÒ', sub: 'Pho Văn', isCenter: false },
+                { name: 'NHÌ NGHÈO', sub: 'Pho Văn', isCenter: false },
+                { name: 'BA GÀ', sub: 'Pho Sách', isCenter: false },
+                { name: 'TỨ TƯỢNG', sub: 'Pho Vạn', isCenter: false },
+                { name: 'NGŨ TRƯA', sub: 'Pho Văn', isCenter: false },
+                { name: 'BẠCH HUÊ', sub: 'Quân Phụ', isCenter: false },
+                { name: 'THÁI TỬ', sub: 'Quân Phụ', isCenter: false },
+                { name: 'ÔNG ẦM', sub: 'Quân Phụ', isCenter: false }
+            ];
+
+            // Chòi Cái đặt chính giữa phía sau sân khấu (z = -11.5)
+            const centerHut = createBambooHut(hutCards[0].name, hutCards[0].sub, true);
+            centerHut.position.set(0, 0, -11.5);
+            scene.add(centerHut);
+
+            // 8 Chòi con chia đều 2 cánh trái/phải tạo thành vòng cung ôm lấy sân khấu
+            const wingAngles = [
+                -0.36, -0.72, -1.08, -1.44,
+                 0.36,  0.72,  1.08,  1.44
+            ];
+            const radius = 12.2;
+            hutMeshes = [];
+            wingAngles.forEach((angle, idx) => {
+                const cardInfo = hutCards[idx + 1];
+                const hut = createBambooHut(cardInfo.name, cardInfo.sub, false);
+                const x = Math.sin(angle) * radius;
+                const z = -Math.cos(angle) * radius;
+                hut.position.set(x, 0, z);
+                hut.lookAt(0, 0, 0); // Hướng mặt chòi vào sân khấu trung tâm
+                scene.add(hut);
+
+                hutMeshes.push({
+                    index: idx + 1,
+                    label: `Chòi ${idx + 1} (${cardInfo.name})`,
+                    shortName: `Chòi ${idx + 1}`,
+                    cardTitle: cardInfo.name,
+                    mesh: hut,
+                    position: new THREE.Vector3(x, 0, z)
+                });
+            });
+
+            // 8. Nhân vật Anh Hiệu trên sân khấu trung tâm
+            anhHieuGroup = createStylizedCharacter({ robeColor: 0xb91c1c, hatType: 'khandong', isSitting: false });
+            anhHieuGroup.position.set(0, 0.32, 0.2);
+
+            // Cánh tay phải cầm ống thẻ bài tre
+            rightArmGroup = new THREE.Group();
+            rightArmGroup.position.set(0.36, 1.25, 0.1);
+            const armMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.07, 0.08, 0.55, 10),
+                new THREE.MeshStandardMaterial({ color: 0xb91c1c })
+            );
+            armMesh.position.y = -0.15;
+            armMesh.rotation.z = 0.4;
+            rightArmGroup.add(armMesh);
+
+            // Ống thẻ tre & các thẻ bài nhô lên
+            const tubeMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.11, 0.1, 0.48, 14),
+                new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.5 })
+            );
+            tubeMesh.position.set(0.22, -0.25, 0.15);
+            tubeMesh.rotation.x = 0.35;
+            rightArmGroup.add(tubeMesh);
+
+            for (let i = 0; i < 4; i++) {
+                const stick = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.05, 0.25, 0.015),
+                    new THREE.MeshStandardMaterial({ color: 0xfef08a })
+                );
+                stick.position.set(0.19 + i * 0.02, -0.02, 0.22);
+                stick.rotation.z = (i - 1.5) * 0.12;
+                rightArmGroup.add(stick);
+            }
+
+            anhHieuGroup.add(rightArmGroup);
+            scene.add(anhHieuGroup);
+
+            // 9. Khu vực Nhạc Cụ Dân Tộc bên trái sân khấu
+            const musicCorner = new THREE.Group();
+            musicCorner.position.set(-4.0, 0.32, -1.6);
+
+            // Trống Chiến lớn đặt trên giá gỗ
+            const drumBody = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.62, 0.62, 0.78, 24),
+                new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.4 })
+            );
+            drumBody.position.y = 0.72;
+            drumBody.rotation.z = 0.25;
+            drumBody.castShadow = true;
+
+            const drumHead = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.63, 0.63, 0.04, 24),
+                new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.6 })
+            );
+            drumHead.position.set(-0.09, 1.09, 0);
+            drumHead.rotation.z = 0.25;
+
+            // Giá đỡ trống
+            const standMat = new THREE.MeshStandardMaterial({ color: 0x451a03 });
+            const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.1, 0.1), standMat);
+            leg1.position.set(0, 0.45, 0.45);
+            leg1.rotation.z = 0.4;
+            const leg2 = leg1.clone();
+            leg2.rotation.z = -0.4;
+
+            musicCorner.add(drumBody, drumHead, leg1, leg2);
+
+            // Nhạc công đánh trống & kéo đàn nhị
+            const musician1 = createStylizedCharacter({ robeColor: 0x0f766e, hatType: 'khandong', isSitting: true });
+            musician1.position.set(0.85, 0, 0.2);
+            musician1.rotation.y = -Math.PI / 2;
+            musicCorner.add(musician1);
+
+            const musician2 = createStylizedCharacter({ robeColor: 0xb45309, hatType: 'khandong', isSitting: true });
+            musician2.position.set(-0.5, 0, 1.2);
+            musician2.rotation.y = Math.PI / 3;
+            musicCorner.add(musician2);
+
+            scene.add(musicCorner);
+
+            // 10. Bàn Trưng Bày Bộ Bài Chòi & Ống Thẻ bên phải sân khấu
+            const cardsTableGroup = new THREE.Group();
+            cardsTableGroup.position.set(3.6, 0.32, -1.4);
+
+            const tableTop = new THREE.Mesh(
+                new THREE.BoxGeometry(1.8, 0.12, 1.1),
+                new THREE.MeshStandardMaterial({ color: 0x78350f })
+            );
+            tableTop.position.y = 0.85;
+            tableTop.castShadow = true;
+
+            const tableCloth = new THREE.Mesh(
+                new THREE.BoxGeometry(1.84, 0.04, 1.14),
+                new THREE.MeshStandardMaterial({ color: 0xb91c1c })
+            );
+            tableCloth.position.y = 0.91;
+
+            // Các cọc thẻ bài xếp trên bàn
+            for (let i = -2; i <= 2; i++) {
+                const cardMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.24, 0.03, 0.45),
+                    new THREE.MeshStandardMaterial({ color: 0xfef3c7 })
+                );
+                cardMesh.position.set(i * 0.32, 0.95, 0.1);
+                cardMesh.rotation.y = (i % 2) * 0.15;
+                cardsTableGroup.add(cardMesh);
+            }
+
+            cardsTableGroup.add(tableTop, tableCloth);
+            scene.add(cardsTableGroup);
+
+            // 11. Hệ thống Cột Đèn Lồng Treo Cao quanh khu lễ hội
+            const lanternCircleCount = 12;
+            for (let i = 0; i < lanternCircleCount; i++) {
+                const angle = (i / lanternCircleCount) * Math.PI * 2;
+                const r = 16.5;
+                const lx = Math.cos(angle) * r;
+                const lz = Math.sin(angle) * r;
+
+                // Cột tre treo đèn
+                const pole = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.08, 0.1, 6.2, 10),
+                    new THREE.MeshStandardMaterial({ color: 0x92400e })
+                );
+                pole.position.set(lx, 3.1, lz);
+                scene.add(pole);
+
+                // Cần treo ngang hướng vào trong
+                const arm = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.04, 0.04, 1.4, 8),
+                    new THREE.MeshStandardMaterial({ color: 0xb45309 })
+                );
+                arm.position.set(lx * 0.94, 5.9, lz * 0.94);
+                arm.lookAt(0, 5.9, 0);
+                arm.rotateX(Math.PI / 2);
+                scene.add(arm);
+
+                const lantern = createLantern(i % 2 === 0 ? 0xdc2626 : 0xf59e0b);
+                lantern.position.set(lx * 0.89, 5.25, lz * 0.89);
+                scene.add(lantern);
+                lanterns.push({ mesh: lantern, phase: i * 0.6 });
+            }
+
+            // 12. Hiệu ứng Hạt Ánh Sáng Lễ Hội (Đom đóm / Hoa đăng bay lơ lửng)
+            const particleCount = 160;
+            const particleGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 36;
+                positions[i * 3 + 1] = 0.8 + Math.random() * 11;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 36;
+            }
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const particleMat = new THREE.PointsMaterial({
+                color: 0xfde047,
+                size: 0.18,
+                transparent: true,
+                opacity: 0.85
+            });
+            fireflies = new THREE.Points(particleGeo, particleMat);
+            scene.add(fireflies);
+
+            // Tạo các nút Hotspot 3D -> 2D trên DOM
+            buildHotspotMarkers();
+
+            // Lắng nghe thay đổi kích thước màn hình
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        /**
+         * ============================================================================
+         * 4. HỆ THỐNG ĐIỂM NÓNG TƯƠNG TÁC (INTERACTIVE HOTSPOTS) & CAMERA TWEEN
+         * ============================================================================
+         */
+        let currentHotspotKey = null;
+
+        function buildHotspotMarkers() {
+            const overlay = document.getElementById('hotspots-overlay');
+            overlay.innerHTML = '';
+
+            Object.values(HOTSPOT_DATA).forEach((item, index) => {
+                const btn = document.createElement('button');
+                btn.id = `marker-${item.id}`;
+                btn.className = 'hotspot-marker pointer-events-auto group flex items-center gap-2';
+                btn.innerHTML = `
+                    <div class="relative flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-amber-400 to-red-600 text-white font-bold text-sm shadow-lg border-2 border-yellow-200">
+                        <span class="pulse-ring absolute inset-0 rounded-full bg-amber-400"></span>
+                        <span class="relative z-10">${index + 1}</span>
+                    </div>
+                    <span class="glass-panel px-2.5 py-1 rounded-lg text-xs font-semibold text-amber-100 whitespace-nowrap opacity-90 group-hover:opacity-100 group-hover:border-amber-300 transition shadow-md">
+                        ${item.title.replace(/^\d+\.\s*/, '')}
+                    </span>
+                `;
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    focusHotspot(item.id);
+                });
+                overlay.appendChild(btn);
+            });
+        }
+
+        // Cập nhật tọa độ màn hình 2D của các Hotspot từ không gian 3D
+        function updateHotspotPositions() {
+            const halfW = window.innerWidth / 2;
+            const halfH = window.innerHeight / 2;
+
+            Object.values(HOTSPOT_DATA).forEach(item => {
+                const el = document.getElementById(`marker-${item.id}`);
+                if (!el) return;
+
+                const projected = item.position3D.clone().project(camera);
+                // Kiểm tra điểm có nằm phía trước camera không
+                if (projected.z > 1) {
+                    el.style.opacity = '0';
+                    el.style.pointerEvents = 'none';
+                } else {
+                    const x = projected.x * halfW + halfW;
+                    const y = -(projected.y * halfH) + halfH;
+                    el.style.left = `${x}px`;
+                    el.style.top = `${y}px`;
+                    el.style.opacity = '1';
+                    el.style.pointerEvents = 'auto';
+                }
+            });
+        }
+
+        // Di chuyển camera mượt mà tới vị trí đích
+        function moveCameraSmooth(targetPos, targetLookAt) {
+            cameraTween.active = true;
+            cameraTween.startPos.copy(camera.position);
+            cameraTween.endPos.copy(targetPos);
+            cameraTween.startTarget.copy(controls.target);
+            cameraTween.endTarget.copy(targetLookAt);
+            cameraTween.progress = 0;
+        }
+
+        // Mở thông tin Hotspot cụ thể
+        function focusHotspot(key) {
+            if (key === 'overview') {
+                closeEduPanel();
+                moveCameraSmooth(new THREE.Vector3(0, 8.5, 16.5), new THREE.Vector3(0, 2.2, -2.5));
+                updateNavPills('overview');
+                return;
+            }
+
+            if (key === 'birdseye') {
+                closeEduPanel();
+                moveCameraSmooth(new THREE.Vector3(0, 22.5, 9.5), new THREE.Vector3(0, 1.0, -3.5));
+                updateNavPills('birdseye');
+                showToast('Góc nhìn toàn cảnh từ trên cao (Bird’s-eye)');
+                return;
+            }
+
+            const data = HOTSPOT_DATA[key];
+            if (!data) return;
+
+            currentHotspotKey = key;
+            if (isAutoTour) toggleAutoTour(false);
+
+            // Di chuyển camera cận cảnh
+            moveCameraSmooth(data.cameraPos, data.lookAt);
+
+            // Cập nhật nội dung bảng giáo dục
+            document.getElementById('edu-badge').textContent = data.badge;
+            document.getElementById('edu-title').textContent = data.title;
+            document.getElementById('edu-illustration').innerHTML = data.svg;
+            document.getElementById('edu-content').innerHTML = data.paragraphs
+                .map(p => `<p>${p}</p>`)
+                .join('');
+            document.getElementById('edu-fact').textContent = data.fact;
+            document.getElementById('btn-sample-label').textContent = data.sampleLabel;
+
+            // Hiển thị bảng thông tin
+            const panel = document.getElementById('edu-panel');
+            panel.classList.remove('translate-x-[120%]', 'opacity-0');
+            panel.classList.add('translate-x-0', 'opacity-100');
+
+            updateNavPills(key);
+            audioEngine.playWoodblock(0, 860);
+        }
+
+        function closeEduPanel() {
+            const panel = document.getElementById('edu-panel');
+            panel.classList.add('translate-x-[120%]', 'opacity-0');
+            panel.classList.remove('translate-x-0', 'opacity-100');
+            currentHotspotKey = null;
+        }
+
+        function updateNavPills(activeKey) {
+            document.querySelectorAll('.nav-pill').forEach(btn => {
+                if (btn.dataset.target === activeKey) {
+                    btn.classList.add('bg-amber-500', 'text-red-950', 'font-semibold');
+                    btn.classList.remove('text-amber-100', 'hover:bg-white/10');
+                } else {
+                    btn.classList.remove('bg-amber-500', 'text-red-950', 'font-semibold');
+                    btn.classList.add('text-amber-100', 'hover:bg-white/10');
+                }
+            });
+        }
+
+        function toggleAutoTour(forceState) {
+            isAutoTour = typeof forceState === 'boolean' ? forceState : !isAutoTour;
+            const btnText = document.getElementById('text-autotour');
+            const iconTour = document.getElementById('icon-tour');
+
+            if (isAutoTour) {
+                closeEduPanel();
+                cameraTween.active = false;
+                tourAngle = Math.atan2(camera.position.x, camera.position.z);
+                btnText.textContent = 'Đang tham quan...';
+                iconTour.classList.add('text-emerald-400');
+                showToast('Đã bật chế độ Tự động tham quan 360°');
+            } else {
+                btnText.textContent = 'Tự động tham quan';
+                iconTour.classList.remove('text-emerald-400');
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 5. HỆ THỐNG CHƠI HỘI BÀI CHÒI TRỰC TIẾP TRONG 3D & THƯ VIỆN 30 THẺ
+         * ============================================================================
+         */
+        const gameState = {
+            active: false,
+            selectedHutIndex: 1,
+            playerCards: [],
+            matchedCardIds: [],
+            remainingDeck: [],
+            currentCalledCard: null,
+            waitingForPlayerAction: false,
+            turnCount: 0
+        };
+
+        // Mở Modal chọn chòi tre để nhập hội
+        function openHutSelectionModal() {
+            const grid = document.getElementById('hut-grid');
+            grid.innerHTML = '';
+
+            hutMeshes.forEach(hut => {
+                const btn = document.createElement('button');
+                btn.className = 'p-3 rounded-2xl bg-gradient-to-b from-amber-500/20 to-red-950/80 hover:from-amber-400/35 hover:to-red-900 border border-amber-400/40 flex flex-col items-center text-center transition transform hover:scale-105';
+                btn.innerHTML = `
+                    <span class="text-xl mb-1">🏮</span>
+                    <span class="font-bold text-amber-200 text-sm">${hut.shortName}</span>
+                    <span class="text-[11px] text-amber-100/75 mt-0.5">${hut.cardTitle}</span>
+                `;
+                btn.addEventListener('click', () => {
+                    document.getElementById('hut-select-modal').classList.add('hidden');
+                    document.getElementById('hut-select-modal').classList.remove('flex');
+                    startBaiChoiGameInHut(hut.index);
+                });
+                grid.appendChild(btn);
+            });
+
+            const modal = document.getElementById('hut-select-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // Bắt đầu ván chơi trên chòi được chọn
+        function startBaiChoiGameInHut(hutIndex) {
+            const hutObj = hutMeshes.find(h => h.index === hutIndex) || hutMeshes[0];
+            gameState.active = true;
+            gameState.selectedHutIndex = hutObj.index;
+            gameState.matchedCardIds = [];
+            gameState.currentCalledCard = null;
+            gameState.waitingForPlayerAction = false;
+            gameState.turnCount = 0;
+
+            // Xáo trộn bộ 30 thẻ bài chuẩn
+            const shuffled = [...FULL_DECK_30].sort(() => Math.random() - 0.5);
+            gameState.playerCards = shuffled.slice(0, 3);
+            gameState.remainingDeck = [...shuffled].sort(() => Math.random() - 0.5);
+
+            // Đưa camera bay mượt vào góc nhìn người chơi ngồi trên chòi tre nhìn ra sân khấu
+            if (isAutoTour) toggleAutoTour(false);
+            closeEduPanel();
+
+            const hutPos = hutObj.position.clone();
+            const dirToCenter = new THREE.Vector3(0, 0, 0).sub(hutPos).normalize();
+            // Vị trí mắt người chơi ngồi trên sàn chòi (cao 2.65m)
+            const seatCamPos = hutPos.clone().add(new THREE.Vector3(0, 2.65, 0)).addScaledVector(dirToCenter, 0.35);
+            // Nhìn về phía Anh Hiệu ở sân khấu trung tâm
+            const lookTarget = new THREE.Vector3(0, 1.75, 0);
+            moveCameraSmooth(seatCamPos, lookTarget);
+
+            // Đặt 3 thẻ bài tre 3D ngay trên lan can chòi của người chơi
+            update3DPlayerCardsOnHut(hutObj);
+
+            // Hiển thị Bảng điều khiển Ván Chơi bên trái
+            document.getElementById('player-hut-badge').textContent = hutObj.shortName;
+            updateGameScoreUI();
+            renderPlayerHandCardsUI();
+
+            document.getElementById('riddle-verse').innerHTML =
+                `Chào mừng bạn đến với <strong>${hutObj.shortName}</strong>!<br>Nhấn <strong>"Anh Hiệu Xóc Thẻ &amp; Hô Thai"</strong> để bắt đầu.`;
+            document.getElementById('riddle-hint-text').classList.add('hidden');
+            document.getElementById('btn-toggle-hint').classList.add('hidden');
+            document.getElementById('turn-status-banner').textContent = 'Bạn đang giữ 3 thẻ bài tre trên lan can chòi.';
+            document.getElementById('btn-call-next-turn').classList.remove('hidden');
+            document.getElementById('player-action-row').classList.add('hidden');
+
+            const gamePanel = document.getElementById('game-hud-panel');
+            gamePanel.classList.remove('-translate-x-[125%]', 'opacity-0');
+            gamePanel.classList.add('translate-x-0', 'opacity-100');
+
+            audioEngine.playSample('drum_roll');
+            showToast(`Bạn đã vào ngồi ${hutObj.shortName} và nhận 3 thẻ bài!`);
+        }
+
+        function update3DPlayerCardsOnHut(hutObj) {
+            if (playerHeldCardsGroup && playerHeldCardsGroup.parent) {
+                playerHeldCardsGroup.parent.remove(playerHeldCardsGroup);
+            }
+            playerHeldCardsGroup = create3DPlayerHandCards(gameState.playerCards, gameState.matchedCardIds);
+            // Đặt ngay trên lan can phía trước chòi (tọa độ cục bộ của chòi là z = 1.12, y = 1.88)
+            playerHeldCardsGroup.position.set(0, 1.92, 1.12);
+            // Xoay mặt thẻ hướng vào người chơi ngồi trong chòi
+            playerHeldCardsGroup.rotation.y = Math.PI;
+            hutObj.mesh.add(playerHeldCardsGroup);
+        }
+
+        function exitPlayMode() {
+            gameState.active = false;
+            if (playerHeldCardsGroup && playerHeldCardsGroup.parent) {
+                playerHeldCardsGroup.parent.remove(playerHeldCardsGroup);
+                playerHeldCardsGroup = null;
+            }
+            const gamePanel = document.getElementById('game-hud-panel');
+            gamePanel.classList.add('-translate-x-[125%]', 'opacity-0');
+            gamePanel.classList.remove('translate-x-0', 'opacity-100');
+            focusHotspot('overview');
+        }
+
+        function updateGameScoreUI() {
+            document.getElementById('game-score-badge').textContent =
+                `Trúng: ${gameState.matchedCardIds.length} / 3 thẻ`;
+        }
+
+        function renderPlayerHandCardsUI() {
+            const container = document.getElementById('player-hand-cards');
+            container.innerHTML = '';
+
+            gameState.playerCards.forEach(card => {
+                const isMatched = gameState.matchedCardIds.includes(card.id);
+                const el = document.createElement('button');
+                el.className = `rounded-xl p-2 text-center border-2 transition flex flex-col items-center justify-between relative ${
+                    isMatched
+                        ? 'bg-emerald-100 border-emerald-500 text-emerald-950 shadow-md'
+                        : 'paper-card text-red-950 hover:scale-105'
+                }`;
+                el.innerHTML = `
+                    ${isMatched ? '<span class="absolute -top-2 -right-2 bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow">✓ Trúng</span>' : ''}
+                    <span class="text-[9px] font-bold uppercase tracking-wider text-red-800">${card.pho}</span>
+                    <div class="w-11 h-11 my-1">${card.art}</div>
+                    <span class="font-serif-vn font-bold text-xs leading-tight">${card.name}</span>
+                `;
+                el.addEventListener('click', () => {
+                    openDeckLibraryWithCard(card.id);
+                });
+                container.appendChild(el);
+            });
+        }
+
+        // Lượt Anh Hiệu xóc thẻ & hô câu thai đố
+        function triggerAnhHieuNextTurn() {
+            if (gameState.waitingForPlayerAction) return;
+
+            // Đảm bảo bộ bài còn thẻ; ưu tiên thỉnh thoảng ra thẻ của người chơi để nhịp độ vui tươi, giáo dục
+            if (gameState.remainingDeck.length === 0) {
+                gameState.remainingDeck = [...FULL_DECK_30].sort(() => Math.random() - 0.5);
+            }
+
+            gameState.turnCount++;
+            let calledCard;
+            const unMatchedPlayerCards = gameState.playerCards.filter(
+                c => !gameState.matchedCardIds.includes(c.id)
+            );
+
+            // Cứ mỗi 2-3 lượt sẽ đảm bảo xuất hiện ít nhất 1 thẻ nằm trong tay người chơi
+            if (gameState.turnCount % 2 === 0 && unMatchedPlayerCards.length > 0) {
+                calledCard = unMatchedPlayerCards[Math.floor(Math.random() * unMatchedPlayerCards.length)];
+                gameState.remainingDeck = gameState.remainingDeck.filter(c => c.id !== calledCard.id);
+            } else {
+                calledCard = gameState.remainingDeck.pop();
+            }
+
+            gameState.currentCalledCard = calledCard;
+            gameState.waitingForPlayerAction = true;
+
+            // Hiệu ứng Anh Hiệu xóc ống thẻ trong 3D & phát âm thanh
+            isShakingTube = true;
+            setTimeout(() => { isShakingTube = false; }, 950);
+            audioEngine.playBambooShake();
+            setTimeout(() => {
+                audioEngine.playSample('ho_thai');
+            }, 550);
+
+            // Hiển thị câu thai đố (ẩn tên quân bài để người chơi tự suy luận)
+            document.getElementById('riddle-verse').innerHTML = calledCard.verse;
+            document.getElementById('riddle-hint-text').textContent = `💡 Gợi ý: ${calledCard.hint}`;
+            document.getElementById('riddle-hint-text').classList.add('hidden');
+            document.getElementById('btn-toggle-hint').classList.remove('hidden');
+
+            document.getElementById('turn-status-banner').textContent =
+                'Lắng nghe câu thai trên! Bạn có quân bài này trong 3 thẻ không?';
+
+            document.getElementById('btn-call-next-turn').classList.add('hidden');
+            document.getElementById('player-action-row').classList.remove('hidden');
+        }
+
+        // Người chơi nhấn "Gõ Mõ Nhận Thẻ!"
+        function handlePlayerHitWoodblock() {
+            if (!gameState.waitingForPlayerAction || !gameState.currentCalledCard) return;
+
+            const called = gameState.currentCalledCard;
+            const hasCard = gameState.playerCards.some(c => c.id === called.id);
+
+            // Phát tiếng mõ tre "cốc cốc"
+            audioEngine.playWoodblock(0, 920);
+            audioEngine.playWoodblock(0.16, 980);
+
+            if (!hasCard) {
+                showToast(`Chưa khớp! Câu thai vừa rồi là quân "${called.name}" (${called.pho}).`);
+                document.getElementById('turn-status-banner').innerHTML =
+                    `<span class="text-amber-300">Đó là quân <strong>${called.name}</strong> — không có trong 3 thẻ của bạn!</span>`;
+                finishCurrentTurn();
+                return;
+            }
+
+            if (gameState.matchedCardIds.includes(called.id)) {
+                showToast(`Bạn đã nhận quân "${called.name}" ở lượt trước rồi!`);
+                finishCurrentTurn();
+                return;
+            }
+
+            // Trúng thẻ chính xác!
+            gameState.matchedCardIds.push(called.id);
+            updateGameScoreUI();
+            renderPlayerHandCardsUI();
+
+            const hutObj = hutMeshes.find(h => h.index === gameState.selectedHutIndex);
+            if (hutObj) update3DPlayerCardsOnHut(hutObj);
+
+            audioEngine.playDrum(0.1, 130, 0.45);
+            showToast(`🎉 Chuẩn xác! Bạn đã trúng quân "${called.name}"!`);
+            document.getElementById('turn-status-banner').innerHTML =
+                `<span class="text-emerald-300 font-bold">✓ Trúng quân ${called.name}! (${gameState.matchedCardIds.length}/3 thẻ)</span>`;
+
+            // Kiểm tra đủ 3 thẻ -> TỚI RỒI!
+            if (gameState.matchedCardIds.length >= 3) {
+                gameState.waitingForPlayerAction = false;
+                setTimeout(() => {
+                    triggerVictoryCelebration();
+                }, 650);
+            } else {
+                finishCurrentTurn();
+            }
+        }
+
+        // Người chơi nhấn "Bỏ qua"
+        function handlePlayerPassTurn() {
+            if (!gameState.waitingForPlayerAction || !gameState.currentCalledCard) return;
+
+            const called = gameState.currentCalledCard;
+            const missedOwnCard = gameState.playerCards.some(
+                c => c.id === called.id && !gameState.matchedCardIds.includes(c.id)
+            );
+
+            if (missedOwnCard) {
+                showToast(`Tiếc quá! Câu thai vừa rồi chính là quân "${called.name}" trên tay bạn!`);
+                document.getElementById('turn-status-banner').innerHTML =
+                    `<span class="text-rose-300">Tiếc quá! Đó là quân <strong>${called.name}</strong> của bạn!</span>`;
+            } else {
+                const randomOtherHut = Math.floor(Math.random() * 8) + 1;
+                document.getElementById('turn-status-banner').innerHTML =
+                    `Quân <strong>${called.name}</strong> (${called.pho}) thuộc về Chòi số ${randomOtherHut}.`;
+                audioEngine.playWoodblock(0, 740);
+            }
+
+            finishCurrentTurn();
+        }
+
+        function finishCurrentTurn() {
+            gameState.waitingForPlayerAction = false;
+            document.getElementById('player-action-row').classList.add('hidden');
+            document.getElementById('btn-call-next-turn').classList.remove('hidden');
+        }
+
+        function triggerVictoryCelebration() {
+            audioEngine.playVictoryFanfare();
+
+            const summaryContainer = document.getElementById('victory-cards-summary');
+            summaryContainer.innerHTML = gameState.playerCards.map(c => `
+                <div class="paper-card rounded-xl p-2.5 text-red-950 flex flex-col items-center text-center">
+                    <span class="text-[9px] font-bold uppercase text-red-800">${c.pho}</span>
+                    <div class="w-12 h-12 my-1">${c.art}</div>
+                    <strong class="font-serif-vn text-xs">${c.name}</strong>
+                </div>
+            `).join('');
+
+            const modal = document.getElementById('victory-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        /**
+         * ============================================================================
+         * 6. THƯ VIỆN KHÁM PHÁ 30 THẺ BÀI CHÒI (3 PHO: VĂN - VẠN - SÁCH)
+         * ============================================================================
+         */
+        let selectedLibraryCard = FULL_DECK_30[0];
+        let currentPhoFilter = 'ALL';
+
+        function renderDeckLibraryGrid() {
+            const grid = document.getElementById('deck-cards-grid');
+            grid.innerHTML = '';
+
+            const filtered = currentPhoFilter === 'ALL'
+                ? FULL_DECK_30
+                : FULL_DECK_30.filter(c => c.pho === currentPhoFilter);
+
+            filtered.forEach(card => {
+                const isSelected = selectedLibraryCard && selectedLibraryCard.id === card.id;
+                const btn = document.createElement('button');
+                btn.className = `paper-card rounded-xl p-2 text-red-950 flex flex-col items-center text-center transition transform hover:scale-105 ${
+                    isSelected ? 'ring-4 ring-amber-400 scale-[1.03]' : 'opacity-95 hover:opacity-100'
+                }`;
+                btn.innerHTML = `
+                    <div class="w-full flex justify-between text-[9px] font-bold text-red-800">
+                        <span>${card.pho.replace('Pho ', '')}</span>
+                        <span>${card.han}</span>
+                    </div>
+                    <div class="w-12 h-12 my-1">${card.art}</div>
+                    <span class="font-serif-vn font-bold text-[11px] leading-tight">${card.name}</span>
+                `;
+                btn.addEventListener('click', () => {
+                    selectLibraryCard(card);
+                    audioEngine.playWoodblock(0, 860);
+                });
+                grid.appendChild(btn);
+            });
+        }
+
+        function selectLibraryCard(card) {
+            selectedLibraryCard = card;
+            document.getElementById('lib-card-pho').textContent = card.pho;
+            document.getElementById('lib-card-han').textContent = card.han;
+            document.getElementById('lib-card-name').textContent = card.name;
+            document.getElementById('lib-card-svg').innerHTML = card.art;
+            document.getElementById('lib-card-verse').innerHTML = card.verse;
+            document.getElementById('lib-card-meaning').textContent = card.meaning;
+            renderDeckLibraryGrid();
+        }
+
+        function openDeckLibraryWithCard(cardId) {
+            const found = FULL_DECK_30.find(c => c.id === cardId) || FULL_DECK_30[0];
+            currentPhoFilter = 'ALL';
+            document.querySelectorAll('.pho-filter-btn').forEach(b => {
+                const active = b.dataset.pho === 'ALL';
+                b.classList.toggle('bg-amber-500', active);
+                b.classList.toggle('text-red-950', active);
+                b.classList.toggle('bg-white/10', !active);
+                b.classList.toggle('text-amber-200', !active);
+            });
+            selectLibraryCard(found);
+
+            const modal = document.getElementById('deck-library-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        /**
+         * ============================================================================
+         * 7. VÒNG LẶP HOẠT HỌA (ANIMATION LOOP) & SỰ KIỆN UI
+         * ============================================================================
+         */
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const elapsed = clock.getElapsedTime();
+
+            // 1. Đèn lồng đung đưa nhẹ trong gió xuân
+            lanterns.forEach(item => {
+                item.mesh.rotation.z = Math.sin(elapsed * 1.8 + item.phase) * 0.08;
+                item.mesh.rotation.x = Math.cos(elapsed * 1.4 + item.phase) * 0.05;
+            });
+
+            // 2. Cờ hội trên nóc chòi bay nhẹ
+            flags.forEach((flag, i) => {
+                flag.rotation.y = Math.sin(elapsed * 3.2 + i) * 0.22;
+            });
+
+            // 3. Nhân vật Anh Hiệu cử động diễn xướng sinh động
+            if (anhHieuGroup) {
+                anhHieuGroup.rotation.y = Math.sin(elapsed * 0.9) * 0.35;
+                anhHieuGroup.position.y = 0.32 + Math.abs(Math.sin(elapsed * 2.2)) * 0.04;
+            }
+            if (rightArmGroup) {
+                if (isShakingTube) {
+                    rightArmGroup.rotation.x = -0.55 + Math.sin(elapsed * 32) * 0.35;
+                    rightArmGroup.rotation.z = Math.cos(elapsed * 28) * 0.25;
+                } else {
+                    rightArmGroup.rotation.x = 0;
+                    rightArmGroup.rotation.z = Math.sin(elapsed * 3.0) * 0.15;
+                }
+            }
+
+            // 4. Hạt ánh sáng lễ hội bay lơ lửng
+            if (fireflies) {
+                fireflies.rotation.y = elapsed * 0.04;
+                fireflies.position.y = Math.sin(elapsed * 0.8) * 0.25;
+            }
+
+            // 5. Chuyển động Camera mượt (Smooth Tween)
+            if (cameraTween.active) {
+                cameraTween.progress += 0.025;
+                const t = Math.min(cameraTween.progress, 1);
+                // Hàm Easing Cubic Out mượt mà
+                const ease = 1 - Math.pow(1 - t, 3);
+
+                camera.position.lerpVectors(cameraTween.startPos, cameraTween.endPos, ease);
+                controls.target.lerpVectors(cameraTween.startTarget, cameraTween.endTarget, ease);
+
+                if (t >= 1) {
+                    cameraTween.active = false;
+                }
+            }
+
+            // 6. Chế độ Tự động tham quan (Auto-tour bay vòng quanh sân khấu)
+            if (isAutoTour) {
+                tourAngle += 0.0045;
+                const radius = 15.5;
+                camera.position.x = Math.sin(tourAngle) * radius;
+                camera.position.z = Math.cos(tourAngle) * radius;
+                camera.position.y = 6.8 + Math.sin(tourAngle * 2) * 1.6;
+                controls.target.set(0, 2.2, -2.5);
+            }
+
+            controls.update();
+            updateHotspotPositions();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function showToast(msg) {
+            const box = document.getElementById('toast-box');
+            document.getElementById('toast-text').textContent = msg;
+            box.classList.remove('opacity-0');
+            clearTimeout(box._timer);
+            box._timer = setTimeout(() => {
+                box.classList.add('opacity-0');
+            }, 2600);
+        }
+
+        // Gắn các sự kiện giao diện khi trang tải xong
+        window.onload = function () {
+            initScene();
+            animate();
+
+            // Ẩn màn hình loading sau khi dựng xong cảnh 3D
+            setTimeout(() => {
+                const loader = document.getElementById('loading-screen');
+                loader.classList.add('opacity-0');
+                setTimeout(() => loader.remove(), 700);
+            }, 650);
+
+            // Thanh điều hướng nhanh dưới cùng
+            document.querySelectorAll('.nav-pill').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    focusHotspot(btn.dataset.target);
+                });
+            });
+
+            // Nút đóng bảng thông tin giáo dục
+            document.getElementById('btn-close-edu').addEventListener('click', closeEduPanel);
+
+            // Nút nghe thử âm thanh trong bảng giáo dục
+            document.getElementById('btn-play-sample').addEventListener('click', () => {
+                if (currentHotspotKey && HOTSPOT_DATA[currentHotspotKey]) {
+                    audioEngine.playSample(HOTSPOT_DATA[currentHotspotKey].sampleType);
+                }
+            });
+
+            // Nút chuyển Hotspot kế tiếp
+            document.getElementById('btn-next-hotspot').addEventListener('click', () => {
+                const keys = Object.keys(HOTSPOT_DATA);
+                const idx = keys.indexOf(currentHotspotKey);
+                const nextKey = keys[(idx + 1) % keys.length];
+                focusHotspot(nextKey);
+            });
+
+            // Nút Tự động tham quan
+            document.getElementById('btn-autotour').addEventListener('click', () => {
+                toggleAutoTour();
+            });
+
+            // Nút Bật/Tắt Âm thanh nền Ngũ cung
+            document.getElementById('btn-audio').addEventListener('click', () => {
+                const active = audioEngine.toggleBackgroundMusic();
+                document.getElementById('icon-audio-off').classList.toggle('hidden', active);
+                document.getElementById('icon-audio-on').classList.toggle('hidden', !active);
+                showToast(active ? 'Đã bật nhạc nền ngũ cung & trống hội' : 'Đã tắt âm thanh nền');
+            });
+
+            // Nút Chế độ VR 360° / Toàn màn hình
+            document.getElementById('btn-vr').addEventListener('click', () => {
+                document.body.classList.toggle('vr-mode');
+                const isVr = document.body.classList.contains('vr-mode');
+                if (isVr && document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                    showToast('Đã bật Chế độ Quan sát VR 360° Toàn Cảnh');
+                } else {
+                    if (document.fullscreenElement && document.exitFullscreen) {
+                        document.exitFullscreen().catch(() => {});
+                    }
+                    showToast('Đã thoát Chế độ VR 360°');
+                }
+            });
+
+            // === SỰ KIỆN CHẾ ĐỘ CHƠI BÀI CHÒI TRỰC TIẾP TRÊN CHÒI 3D ===
+            document.getElementById('btn-start-playmode').addEventListener('click', openHutSelectionModal);
+            document.getElementById('btn-switch-hut').addEventListener('click', openHutSelectionModal);
+            document.getElementById('btn-close-hut-modal').addEventListener('click', () => {
+                document.getElementById('hut-select-modal').classList.add('hidden');
+                document.getElementById('hut-select-modal').classList.remove('flex');
+            });
+
+            document.getElementById('btn-exit-playmode').addEventListener('click', exitPlayMode);
+            document.getElementById('btn-call-next-turn').addEventListener('click', triggerAnhHieuNextTurn);
+            document.getElementById('btn-hit-woodblock').addEventListener('click', handlePlayerHitWoodblock);
+            document.getElementById('btn-pass-turn').addEventListener('click', handlePlayerPassTurn);
+
+            document.getElementById('btn-toggle-hint').addEventListener('click', () => {
+                document.getElementById('riddle-hint-text').classList.toggle('hidden');
+            });
+
+            // === SỰ KIỆN THƯ VIỆN 30 THẺ BÀI CHÒI ===
+            document.getElementById('btn-open-deck').addEventListener('click', () => {
+                openDeckLibraryWithCard(selectedLibraryCard.id);
+            });
+            document.getElementById('btn-close-deck').addEventListener('click', () => {
+                document.getElementById('deck-library-modal').classList.add('hidden');
+                document.getElementById('deck-library-modal').classList.remove('flex');
+            });
+            document.querySelectorAll('.pho-filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentPhoFilter = btn.dataset.pho;
+                    document.querySelectorAll('.pho-filter-btn').forEach(b => {
+                        const active = b === btn;
+                        b.classList.toggle('bg-amber-500', active);
+                        b.classList.toggle('text-red-950', active);
+                        b.classList.toggle('bg-white/10', !active);
+                        b.classList.toggle('text-amber-200', !active);
+                    });
+                    renderDeckLibraryGrid();
+                });
+            });
+            document.getElementById('btn-lib-hear-ho').addEventListener('click', () => {
+                audioEngine.playSample('ho_thai');
+            });
+
+            // === SỰ KIỆN MODAL CHIẾN THẮNG ===
+            document.getElementById('btn-play-again').addEventListener('click', () => {
+                document.getElementById('victory-modal').classList.add('hidden');
+                document.getElementById('victory-modal').classList.remove('flex');
+                startBaiChoiGameInHut(gameState.selectedHutIndex);
+            });
+            document.getElementById('btn-close-victory').addEventListener('click', () => {
+                document.getElementById('victory-modal').classList.add('hidden');
+                document.getElementById('victory-modal').classList.remove('flex');
+            });
+        };
+    </script>
+</body>
+</html>
